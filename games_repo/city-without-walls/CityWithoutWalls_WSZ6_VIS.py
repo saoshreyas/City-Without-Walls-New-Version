@@ -105,8 +105,9 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     cr = getattr(state, 'current_role_num', 0)
     homeless = getattr(state, 'homeless_population', 0)
     goal_homeless = int(getattr(state, 'win_homeless_at_or_below', 7490))
-    homeless_progress = 100.0 if homeless <= goal_homeless else (
-        100.0 * goal_homeless / max(1, homeless)
+    starting_homeless = int(round(goal_homeless / 0.70))
+    homeless_progress = 100.0 * (
+        (homeless - goal_homeless) / max(1, starting_homeless - goal_homeless)
     )
     homeless_progress = max(0.0, min(100.0, homeless_progress))
     sup = getattr(state, 'public_support', 0.0)
