@@ -49,6 +49,7 @@ ROLE_MEDICAL = 2
 ROLE_SHELTERS = 3
 ROLE_UNIVERSITY = 4
 ROLE_OBSERVER = 5
+TURN_OPERATOR_OFFER_SIZE = 5
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +125,7 @@ class CityWithoutWalls_State(sz.SZ_State):
             self.operating_obligations = 250.0
 
             self.round_actors: list[int] = []
+            self.turn_operator_names: list[str] = []
             self.chronic_reduce_med = 0.0
             self.chronic_reduce_shel = 0.0
             self.observer_report_used = False
@@ -179,6 +181,7 @@ class CityWithoutWalls_State(sz.SZ_State):
             self.operating_obligations = old.operating_obligations
 
             self.round_actors = old.round_actors[:]
+            self.turn_operator_names = list(getattr(old, 'turn_operator_names', []))
             self.chronic_reduce_med = old.chronic_reduce_med
             self.chronic_reduce_shel = old.chronic_reduce_shel
             self.observer_report_used = old.observer_report_used
@@ -287,6 +290,7 @@ def _begin_simulation(state: CityWithoutWalls_State) -> CityWithoutWalls_State:
     ns = CityWithoutWalls_State(old=state)
     ns.phase = 'playing'
     ns.current_role_num = ns.play_order[0]
+    _assign_turn_operator_offer(ns, _macro_operator_list())
     ns.jit_transition = (
         'Simulation underway.\n'
         f'Opening turn: role {ns.current_role_num}. '
@@ -449,6 +453,30 @@ def _check_immediate_terminal(st: CityWithoutWalls_State) -> None:
         st.phase = 'lost'
 
 
+def _assign_turn_operator_offer(st: CityWithoutWalls_State, operator_list: list) -> None:
+    """Sample the action menu for the current stakeholder turn."""
+    if st.phase != 'playing':
+        st.turn_operator_names = []
+        return
+
+    candidates = [
+        op.name
+        for op in operator_list
+        if getattr(op, '_random_offer', False)
+        and getattr(op, 'role', None) == st.current_role_num
+        and _can_pay(st, getattr(op, '_costs', {}) or {})
+    ]
+    if len(candidates) <= TURN_OPERATOR_OFFER_SIZE:
+        st.turn_operator_names = candidates
+    else:
+        st.turn_operator_names = random.sample(candidates, TURN_OPERATOR_OFFER_SIZE)
+
+
+def _is_turn_operator_offered(st: CityWithoutWalls_State, name: str) -> bool:
+    offered = getattr(st, 'turn_operator_names', [])
+    return name in offered
+
+
 def _can_pay(st: CityWithoutWalls_State, costs: dict[str, float]) -> bool:
     for k, v in costs.items():
         if getattr(st, k) < v - 1e-9:
@@ -585,10 +613,12 @@ def _advance_turn(st: CityWithoutWalls_State, operator_list: list) -> None:
     idx = order.index(st.current_role_num)
     if idx < len(order) - 1:
         st.current_role_num = order[idx + 1]
+        _assign_turn_operator_offer(st, operator_list)
     else:
         _run_macro_cycle(st, operator_list)
         if st.phase == 'playing':
             st.current_role_num = order[0]
+            _assign_turn_operator_offer(st, operator_list)
 
 
 def _make_transition(
@@ -683,12 +713,12 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             learn = _LEARN_SNIPPETS.get(base_name, '')
             xf = _make_transition(name, role, costs, diff, effs, url, learn)
 
-            def _pre(s, r=role, c=costs):
+            def _pre(s, r=role, c=costs, n=name):
                 if s.phase != 'playing':
                     return False
                 if s.current_role_num != r:
                     return False
-                return _can_pay(s, c)
+                return _can_pay(s, c) and _is_turn_operator_offered(s, n)
 
             desc_body = learn or (
                 'Evidence brief: open the source link for program background and findings.'
@@ -701,6 +731,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
                 role=role,
             )
             op._costs = dict(costs)
+            op._random_offer = True
             ops.append(op)
 
         # Observer — publish (once)
@@ -1312,30 +1343,21 @@ if __name__ == '__main__':
 
     F = CityWithoutWalls  # module singleton (macro op list must match transitions)
     ops = F.operators.operators
-    ix = {op.name: i for i, op in enumerate(ops)}
 
     s = F.initialize_problem({'active_roles': [0, 1, 2, 3, 4]})
     begin = next(op for op in ops if op.name == 'Review goals & begin simulation')
     assert begin.precond_func(s)
     s = begin.state_xition_func(s)
     assert s.phase == 'playing'
-    # Moderate-cost path matching GSL test intent
-    plan = [
-        'Civic Forum: reduce tensions [legal pressure -2, public support +1]',
-        'Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]',
-        'Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]',
-        'Volunteer Training: social workers +3 [social workers +3, public support +1]',
-        'Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]',
-    ]
-
     print('=== City Without Walls SZ6 smoke test ===\n')
     for rnd in range(3):
         print(f'--- Round cycle {rnd + 1} (game_round before ops={s.game_round}) ---')
-        for name in plan:
+        for _ in range(len(s.play_order)):
             if s.phase != 'playing':
                 break
-            op = ops[ix[name]]
-            assert op.precond_func(s), f'precond failed for {name}'
+            applicable = [op for op in ops if op.precond_func(s)]
+            assert applicable, f'no offered operators for role {s.current_role_num}'
+            op = applicable[0]
             s = op.state_xition_func(s)
         cpy = CityWithoutWalls_State(old=s)
         assert cpy.construction_pipeline is not s.construction_pipeline

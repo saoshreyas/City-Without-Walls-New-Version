@@ -84,6 +84,11 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     gr = getattr(state, 'game_round', 0)
     cr = getattr(state, 'current_role_num', 0)
     homeless = getattr(state, 'homeless_population', 0)
+    goal_homeless = int(getattr(state, 'win_homeless_at_or_below', 7490))
+    homeless_progress = 100.0 if homeless <= goal_homeless else (
+        100.0 * goal_homeless / max(1, homeless)
+    )
+    homeless_progress = max(0.0, min(100.0, homeless_progress))
     sup = getattr(state, 'public_support', 0.0)
     leg = getattr(state, 'legal_pressure', 0.0)
     mom = getattr(state, 'policy_momentum', 0.0)
@@ -168,6 +173,14 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
   padding: 5px 6px; font-size: 0.86rem; border-radius: 4px; }}
 .cww-vis .budget-row:nth-child(even) {{ background: #f5f9ff; }}
 .cww-vis .budget-row strong {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
+.cww-vis .homeless-progress {{ flex: 1 0 100%; min-width: 240px; }}
+.cww-vis .progress-labels {{ display: flex; justify-content: space-between; gap: 12px;
+  margin-bottom: 4px; font-size: 0.78rem; color: rgba(255,255,255,.88); }}
+.cww-vis .progress-labels strong {{ color: #fff; font-variant-numeric: tabular-nums; }}
+.cww-vis .progress-track {{ height: 8px; overflow: hidden; border-radius: 999px;
+  background: rgba(255,255,255,.28); }}
+.cww-vis .progress-fill {{ height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, #ffca28, #66bb6a); }}
 .cww-vis .metric {{ display: flex; justify-content: space-between; margin: 4px 0; }}
 .cww-vis .banner {{ padding: 10px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }}
 .cww-vis .banner.win {{ background: #e8f5e9; color: #1b5e20; }}
@@ -186,6 +199,13 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     <span>{_esc(own_budget_label)} budget</span><strong>{own_budget_value}</strong>
     <button class="budget-toggle" type="button">show all</button>
     <div class="budget-dropdown">{other_budget_rows}</div>
+  </div>
+  <div class="homeless-progress">
+    <div class="progress-labels">
+      <span>Current homeless: <strong>{homeless:,}</strong></span>
+      <span>Goal: <strong>{goal_homeless:,}</strong></span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:{homeless_progress:.1f}%"></div></div>
   </div>
 </div>
 <h1>City Without Walls</h1>
