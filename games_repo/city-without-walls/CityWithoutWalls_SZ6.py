@@ -134,7 +134,7 @@ class CityWithoutWalls_State(sz.SZ_State):
             self.learn_fact: str | None = None
             self.learn_source_url: str | None = None
             # Frozen display thresholds (for intro / VIS; logic uses CFG in code paths).
-            self.win_homeless_at_or_below = int(CFG.baseline_population * CFG.goal_reduction)
+            self.win_homeless_at_or_below = int(round(CFG.baseline_population * CFG.goal_reduction))
             self.win_public_support_at_or_above = 50.0
             self.win_legal_pressure_below = 20.0
             self.lose_after_round = CFG.max_rounds
@@ -202,7 +202,7 @@ class CityWithoutWalls_State(sz.SZ_State):
         ))
 
     def goal_homeless_cap(self) -> int:
-        return int(CFG.baseline_population * CFG.goal_reduction)
+        return int(round(CFG.baseline_population * CFG.goal_reduction))
 
     def is_goal(self) -> bool:
         # Portal runner only consults is_goal() — treat terminal loss like goal.
