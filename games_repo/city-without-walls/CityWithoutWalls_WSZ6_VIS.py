@@ -101,30 +101,23 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     rname = role_labels[cr] if 0 <= cr < len(role_labels) else str(cr)
 
     budget_rows = [
-        ('Neighborhood', getattr(state, 'neighborhood_budget', 0)),
+        ('Neighborhoods', getattr(state, 'neighborhood_budget', 0)),
         ('Business', getattr(state, 'business_budget', 0)),
         ('Medical', getattr(state, 'medical_budget', 0)),
-        ('Shelter', getattr(state, 'shelter_budget', 0)),
+        ('Shelters', getattr(state, 'shelter_budget', 0)),
         ('University', getattr(state, 'university_budget', 0)),
     ]
-    def _row(i: int, label: str, val: float) -> str:
-        cls = 'highlight' if i == role_num else ''
-        return (
-            f'<tr class="{cls}"><td>{_esc(label)}</td>'
-            f'<td class="num">{val:,.0f}</td></tr>'
-        )
+    own_budget_label = 'Observer'
+    own_budget_value = 'N/A'
+    if 0 <= role_num < len(budget_rows):
+        own_budget_label, own_budget = budget_rows[role_num]
+        own_budget_value = f'{own_budget:,.0f} k$'
 
-    b_html = ''.join(_row(i, l, v) for i, (l, v) in enumerate(budget_rows))
-
-    pipe = getattr(state, 'construction_pipeline', []) or []
-    pipe_rows = ''.join(
-        f'<tr><td>{_esc(p.get("kind", ""))}</td>'
-        f'<td class="num">{p.get("units", 0)}</td>'
-        f'<td class="num">{p.get("rounds", 0)}</td></tr>'
-        for p in pipe
+    other_budget_rows = ''.join(
+        f'<div class="budget-row"><span>{_esc(label)}</span><strong>{val:,.0f} k$</strong></div>'
+        for i, (label, val) in enumerate(budget_rows)
+        if i != role_num
     )
-    if not pipe_rows:
-        pipe_rows = '<tr><td colspan="3" class="muted">No projects in pipeline</td></tr>'
 
     learn_title = getattr(state, 'learn_move_title', None)
     learn_fact = getattr(state, 'learn_fact', None)
@@ -157,11 +150,24 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .card {{ border: 1px solid #ccc; border-radius: 8px; padding: 12px;
   background: #fafafa; }}
 .cww-vis .card h2 {{ font-size: 0.95rem; margin: 0 0 8px; }}
-.cww-vis table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; }}
-.cww-vis td, .cww-vis th {{ padding: 4px 6px; text-align: left; }}
-.cww-vis td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
-.cww-vis tr.highlight {{ background: #e3f2fd; }}
-.cww-vis .muted {{ color: #777; }}
+.cww-vis .status-bar {{ display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px;
+  background: #0d47a1; color: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.14); }}
+.cww-vis .status-item {{ display: inline-flex; align-items: baseline; gap: 6px;
+  font-size: 0.9rem; }}
+.cww-vis .status-item strong {{ font-size: 1rem; font-variant-numeric: tabular-nums; }}
+.cww-vis .budget-menu {{ position: relative; display: inline-flex; align-items: center; gap: 8px; }}
+.cww-vis .budget-toggle {{ border: 1px solid rgba(255,255,255,.65); border-radius: 999px;
+  background: rgba(255,255,255,.16); color: #fff; padding: 3px 9px; font-size: 0.78rem;
+  line-height: 1.25; cursor: default; }}
+.cww-vis .budget-dropdown {{ display: none; position: absolute; right: 0; top: 100%;
+  min-width: 230px; z-index: 10; padding: 8px; color: #1a1a1a; background: #fff;
+  border: 1px solid #90caf9; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,.18); }}
+.cww-vis .budget-menu:hover .budget-dropdown {{ display: block; }}
+.cww-vis .budget-row {{ display: flex; justify-content: space-between; gap: 16px;
+  padding: 5px 6px; font-size: 0.86rem; border-radius: 4px; }}
+.cww-vis .budget-row:nth-child(even) {{ background: #f5f9ff; }}
+.cww-vis .budget-row strong {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
 .cww-vis .metric {{ display: flex; justify-content: space-between; margin: 4px 0; }}
 .cww-vis .banner {{ padding: 10px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }}
 .cww-vis .banner.win {{ background: #e8f5e9; color: #1b5e20; }}
@@ -174,13 +180,20 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .learn-src a {{ color: #0d47a1; }}
 </style>
 {status_banner}
+<div class="status-bar">
+  <div class="status-item"><span>Total homeless</span><strong>{homeless:,}</strong></div>
+  <div class="status-item budget-menu">
+    <span>{_esc(own_budget_label)} budget</span><strong>{own_budget_value}</strong>
+    <button class="budget-toggle" type="button">show all</button>
+    <div class="budget-dropdown">{other_budget_rows}</div>
+  </div>
+</div>
 <h1>City Without Walls</h1>
 <p class="sub">Round <strong>{gr}</strong> · Active turn: <strong>{_esc(rname)}</strong>
  · Your role index: {role_num}</p>
 <div class="grid">
   <div class="card">
     <h2>Population &amp; pressure</h2>
-    <div class="metric"><span>Homeless (total)</span><strong>{homeless:,}</strong></div>
     <div class="metric"><span>Public support (0–100)</span><strong>{sup:.1f}</strong></div>
     <div class="metric"><span>Legal pressure</span><strong>{leg:.1f}</strong></div>
     <div class="metric"><span>Policy momentum</span><strong>{mom:.1f}</strong></div>
@@ -194,18 +207,6 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     <div class="metric"><span>Permanent</span><strong>{pu:,.0f}</strong></div>
     <div class="metric"><span>Total units</span><strong>{cap:,.0f}</strong></div>
     <div class="metric"><span>Utilization</span><strong>{(homeless / max(1, cap)):.2f}</strong></div>
-  </div>
-</div>
-<div class="grid" style="margin-top:12px">
-  <div class="card">
-    <h2>Budgets (k$)</h2>
-    <table><thead><tr><th>Stakeholder</th><th>Balance</th></tr></thead>
-    <tbody>{b_html}</tbody></table>
-  </div>
-  <div class="card">
-    <h2>Construction pipeline</h2>
-    <table><thead><tr><th>Type</th><th>Units</th><th>Rounds left</th></tr></thead>
-    <tbody>{pipe_rows}</tbody></table>
   </div>
 </div>
 {learn_block}
