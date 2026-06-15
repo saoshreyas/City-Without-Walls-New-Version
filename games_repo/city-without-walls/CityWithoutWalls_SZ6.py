@@ -456,6 +456,87 @@ def _can_pay(st: CityWithoutWalls_State, costs: dict[str, float]) -> bool:
     return True
 
 
+_EFFECT_LABELS = {
+    'shelter_budget': 'shelter budget',
+    'neighborhood_budget': 'neighborhood budget',
+    'business_budget': 'business budget',
+    'medical_budget': 'medical budget',
+    'university_budget': 'university budget',
+    'shelter_capacity': 'shelter capacity',
+    'transitional_units': 'transitional units',
+    'permanent_units': 'permanent units',
+    'social_workers': 'social workers',
+    'outreach_teams': 'outreach teams',
+    'medical_vans': 'medical vans',
+    'public_support': 'public support',
+    'economy_index': 'economy index',
+    'legal_pressure': 'legal pressure',
+    'policy_momentum': 'policy momentum',
+    'pop_families': 'families',
+    'pop_youth': 'youth',
+    'pop_chronic': 'chronic homelessness',
+    'pop_veterans': 'veterans',
+}
+
+_SCHEDULE_LABELS = {
+    'shelter': 'shelter capacity',
+    'trans': 'transitional units',
+    'perm': 'permanent units',
+}
+
+
+def _fmt_number(value: float) -> str:
+    rounded = round(float(value), 2)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return f'{rounded:.2f}'.rstrip('0').rstrip('.')
+
+
+def _fmt_signed(value: float) -> str:
+    return ('+' if value > 0 else '') + _fmt_number(value)
+
+
+def _fmt_percent(value: float) -> str:
+    return _fmt_signed(value * 100.0) + '%'
+
+
+def _base_operator_label(name: str) -> str:
+    """Move final parenthetical text into a colon subtitle."""
+    if name.endswith(')') and '(' in name:
+        prefix, suffix = name.rsplit('(', 1)
+        detail = suffix[:-1].strip()
+        if detail:
+            return f'{prefix.rstrip()}: {detail}'
+    return name
+
+
+def _format_effect(effect: tuple) -> str:
+    kind = effect[0]
+    if kind == 'add':
+        _, attr, delta = effect
+        return f'{_EFFECT_LABELS.get(attr, attr.replace("_", " "))} {_fmt_signed(delta)}'
+    if kind == 'mulp':
+        _, attr, frac = effect
+        return f'{_EFFECT_LABELS.get(attr, attr.replace("_", " "))} {_fmt_percent(frac)}'
+    if kind == 'sched':
+        _, item, units = effect
+        return f'{_SCHEDULE_LABELS.get(item, item)} +{_fmt_number(units)} scheduled'
+    if kind == 'displace':
+        _, frac = effect
+        return f'displacement {_fmt_percent(frac)}'
+    return ' '.join(str(x) for x in effect)
+
+
+def _format_effects(effects: list) -> str:
+    return ', '.join(_format_effect(effect) for effect in effects)
+
+
+def _format_operator_name(name: str, effects: list) -> str:
+    label = _base_operator_label(name)
+    effect_text = _format_effects(effects)
+    return f'{label} [{effect_text}]' if effect_text else label
+
+
 def _pay(st: CityWithoutWalls_State, costs: dict[str, float]) -> None:
     for k, v in costs.items():
         setattr(st, k, getattr(st, k) - v)
@@ -597,8 +678,9 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
         specs = _OPERATOR_SPEC()
         ops: list = [begin_op]
         for sp in specs:
-            name, role, costs, diff, effs, url = sp
-            learn = _LEARN_SNIPPETS.get(name, '')
+            base_name, role, costs, diff, effs, url = sp
+            name = _format_operator_name(base_name, effs)
+            learn = _LEARN_SNIPPETS.get(base_name, '')
             xf = _make_transition(name, role, costs, diff, effs, url, learn)
 
             def _pre(s, r=role, c=costs):
@@ -622,6 +704,9 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             ops.append(op)
 
         # Observer — publish (once)
+        _pub_effects = [('add', 'public_support', 5.0), ('add', 'policy_momentum', 2.0)]
+        _pub_name = _format_operator_name('Publish Independent Report', _pub_effects)
+
         def _pub_pre(s):
             if s.phase != 'playing':
                 return False
@@ -642,11 +727,11 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
                 'unsheltered homelessness over time.'
             )
             _pub_url = 'https://pmc.ncbi.nlm.nih.gov/articles/PMC8352395/'
-            ns.learn_move_title = 'Publish Independent Report'
+            ns.learn_move_title = _pub_name
             ns.learn_fact = _pub_fact
             ns.learn_source_url = _pub_url
             ns.jit_transition = (
-                'Publish Independent Report\n'
+                f'{_pub_name}\n'
                 '+5 public support, +2 policy momentum\n'
                 '---\n'
                 f'Policy note: {_pub_fact}'
@@ -665,7 +750,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             'Source: https://pmc.ncbi.nlm.nih.gov/articles/PMC8352395/'
         )
         ops.append(sz.SZ_Operator(
-            name='Publish Independent Report',
+            name=_pub_name,
             description=_obs_pub_desc,
             precond_func=_pub_pre,
             state_xition_func=_pub_xf,
@@ -1236,11 +1321,11 @@ if __name__ == '__main__':
     assert s.phase == 'playing'
     # Moderate-cost path matching GSL test intent
     plan = [
-        'Civic Forum (reduce tensions)',
-        'Volunteer Street Ambassadors',
-        'Expand Telehealth for Unhoused',
-        'Volunteer Training (social workers +3)',
-        'Open Data & Dashboard (public transparency)',
+        'Civic Forum: reduce tensions [legal pressure -2, public support +1]',
+        'Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]',
+        'Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]',
+        'Volunteer Training: social workers +3 [social workers +3, public support +1]',
+        'Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]',
     ]
 
     print('=== City Without Walls SZ6 smoke test ===\n')

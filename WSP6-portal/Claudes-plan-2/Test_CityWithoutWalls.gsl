@@ -44,11 +44,11 @@ Assert_state        current_role_num  0
 
 # --- Round 1 (one moderate operator per role) ---------------------------
 
-Op Alice "Civic Forum (reduce tensions)"
-Op Bob   "Volunteer Street Ambassadors"
-Op Carol "Expand Telehealth for Unhoused"
-Op Dave  "Volunteer Training (social workers +3)"
-Op Eve   "Open Data & Dashboard (public transparency)"
+Op Alice "Civic Forum: reduce tensions [legal pressure -2, public support +1]"
+Op Bob   "Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]"
+Op Carol "Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]"
+Op Dave  "Volunteer Training: social workers +3 [social workers +3, public support +1]"
+Op Eve   "Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]"
 
 Assert_state  game_round           2
 Assert_state  homeless_population  10815
@@ -58,11 +58,11 @@ Assert_state  legal_pressure       10.97
 
 # --- Round 2 ----------------------------------------------------------
 
-Op Alice "Civic Forum (reduce tensions)"
-Op Bob   "Volunteer Street Ambassadors"
-Op Carol "Expand Telehealth for Unhoused"
-Op Dave  "Volunteer Training (social workers +3)"
-Op Eve   "Open Data & Dashboard (public transparency)"
+Op Alice "Civic Forum: reduce tensions [legal pressure -2, public support +1]"
+Op Bob   "Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]"
+Op Carol "Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]"
+Op Dave  "Volunteer Training: social workers +3 [social workers +3, public support +1]"
+Op Eve   "Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]"
 
 Assert_state  game_round           3
 Assert_state  homeless_population  10931
