@@ -114,7 +114,6 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     leg = getattr(state, 'legal_pressure', 0.0)
     mom = getattr(state, 'policy_momentum', 0.0)
     econ = getattr(state, 'economy_index', 0.0)
-    disp = getattr(state, 'displaced', 0.0)
 
     sc = getattr(state, 'shelter_capacity', 0)
     tu = getattr(state, 'transitional_units', 0)
@@ -264,7 +263,6 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
     {_metric('Legal pressure', f'{leg:.1f}', 'legal_pressure')}
     {_metric('Policy momentum', f'{mom:.1f}', 'policy_momentum')}
     {_metric('Economy index', f'{econ:.1f}', 'economy_index')}
-    {_metric('Displaced (cum.)', f'{disp:,.0f}', 'displaced')}
   </div>
   <div class="card">
     <h2>Housing capacity</h2>

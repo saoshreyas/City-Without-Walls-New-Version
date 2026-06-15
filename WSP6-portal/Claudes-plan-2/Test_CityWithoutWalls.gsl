@@ -44,11 +44,11 @@ Assert_state        current_role_num  0
 
 # --- Round 1 (one moderate operator per role) ---------------------------
 
-Op Alice "Media Campaign: reframe homelessness [public support +7.5, legal pressure -3.9]"
-Op Bob   "Fund Job Readiness Programs [families -7%, youth -16.8%, public support +2.75]"
-Op Carol "Deploy Mobile Clinics [medical vans +2.4, chronic homelessness -8.4%, public support +3.5]"
-Op Dave  "Volunteer Training: social workers +3 [social workers +3.6, public support +1.25]"
-Op Eve   "Research & Program Evaluation [policy momentum +1.88, university budget +60]"
+Op Alice "Media Campaign: reframe homelessness [neighborhood budget -140, public support +7.5, legal pressure -3.9]"
+Op Bob   "Fund Job Readiness Programs [business budget -180, families -7%, youth -16.8%, public support +2.75]"
+Op Carol "Deploy Mobile Clinics [medical budget -200, medical vans +2.4, chronic homelessness -8.4%, public support +3.5]"
+Op Dave  "Volunteer Training: social workers +3 [shelter budget -40, social workers +3.6, public support +1.25]"
+Op Eve   "Research & Program Evaluation [university budget -100, policy momentum +1.88, university budget +60]"
 
 Assert_state  game_round           2
 Assert_state  homeless_population  10031
@@ -58,11 +58,11 @@ Assert_state  legal_pressure       7.6
 
 # --- Round 2 ----------------------------------------------------------
 
-Op Alice "Block New Low-Income Development: NIMBY action [permanent units -25, public support +2.5, legal pressure +2]"
-Op Bob   "Tax Incentives for Affordable Housing [permanent units +150 scheduled, economy index +1.98, public support +1.5]"
-Op Carol "Medicaid & Benefits Enrollment Drive [chronic homelessness -9.8%, policy momentum +1.5]"
-Op Dave  "Emergency Expansion: beds +300 [shelter capacity +375 scheduled, families -14%, veterans -16.8%]"
-Op Eve   "Service-Learning & Workforce Integration [social workers +6, youth -14%, public support +1.5, university budget +35]"
+Op Alice "Block New Low-Income Development: NIMBY action [neighborhood budget -60, permanent units -25, public support +2.5, legal pressure +2]"
+Op Bob   "Tax Incentives for Affordable Housing [business budget -260, permanent units +150 scheduled, economy index +1.98, public support +1.5, business budget +55]"
+Op Carol "Medicaid & Benefits Enrollment Drive [medical budget -160, chronic homelessness -9.8%, policy momentum +1.5, medical budget +45]"
+Op Dave  "Emergency Expansion: beds +300 [shelter budget -360, shelter capacity +375 scheduled, families -14%, veterans -16.8%]"
+Op Eve   "Service-Learning & Workforce Integration [university budget -110, social workers +6, youth -14%, public support +1.5]"
 
 Assert_state  game_round           3
 Assert_state  homeless_population  9164

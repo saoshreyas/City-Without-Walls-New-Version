@@ -633,9 +633,18 @@ def _format_effects(effects: list) -> str:
     return ', '.join(_format_effect(effect) for effect in effects)
 
 
-def _format_operator_name(name: str, effects: list) -> str:
+def _format_costs(costs: dict) -> str:
+    return ', '.join(
+        f'{_EFFECT_LABELS.get(attr, attr.replace("_", " "))} -{_fmt_number(value)}'
+        for attr, value in costs.items()
+        if value
+    )
+
+
+def _format_operator_name(name: str, effects: list, costs: dict | None = None) -> str:
     label = _base_operator_label(name)
-    effect_text = _format_effects(effects)
+    parts = [part for part in (_format_costs(costs or {}), _format_effects(effects)) if part]
+    effect_text = ', '.join(parts)
     return f'{label} [{effect_text}]' if effect_text else label
 
 
@@ -787,7 +796,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
         for sp in specs:
             base_name, role, costs, diff, raw_effs, url = sp
             effs = _tune_effects(raw_effs)
-            name = _format_operator_name(base_name, effs)
+            name = _format_operator_name(base_name, effs, costs)
             learn = _LEARN_SNIPPETS.get(base_name, '')
             xf = _make_transition(name, role, costs, diff, effs, url, learn)
 
@@ -1160,7 +1169,8 @@ def _OPERATOR_SPEC():
         ('Emergency Expansion (beds +300)', ROLE_SHELTERS, {'shelter_budget': 360.0}, 0.20,
          [('sched', 'shelter', 300), ('mulp', 'pop_families', -0.10), ('mulp', 'pop_veterans', -0.12)], U),
         ('Community Partnership (volunteers & caseworkers)', ROLE_SHELTERS, {'shelter_budget': 100.0}, 0.05,
-         [('add', 'social_workers', 6.0), ('mulp', 'pop_chronic', -0.015), ('add', 'policy_momentum', 0.6)],
+         [('add', 'social_workers', 6.0), ('mulp', 'pop_chronic', -0.015), ('add', 'policy_momentum', 0.6),
+          ('add', 'shelter_budget', 35.0)],
          'https://www.hsri.org/projects/evaluating-samhsa-four-homelessness-programs-and-resources'),
         ('Housing First Pilot (perm +150)', ROLE_SHELTERS, {'shelter_budget': 520.0}, 0.18,
          [('sched', 'perm', 150), ('mulp', 'pop_chronic', -0.08), ('add', 'public_support', 2.5),
@@ -1196,7 +1206,7 @@ def _OPERATOR_SPEC():
         ('Evaluation & Data Sharing (with Univ)', ROLE_SHELTERS,
          {'shelter_budget': 80.0, 'university_budget': 70.0}, 0.03,
          [('add', 'policy_momentum', 1.6), ('add', 'public_support', 0.8),
-          ('add', 'university_budget', 35.0)],
+          ('add', 'shelter_budget', 25.0), ('add', 'university_budget', 25.0)],
          'https://www.usich.gov/'),
 
         # --- NEIGHBORHOODS (0) ---
@@ -1211,7 +1221,8 @@ def _OPERATOR_SPEC():
           ('add', 'public_support', 3.0)],
          'https://www.hud.gov/program_offices/public_indian_housing/programs/hcv'),
         ('Civic Forum (reduce tensions)', ROLE_NEIGHBORHOODS, {'neighborhood_budget': 30.0}, 0.02,
-         [('add', 'legal_pressure', -2.0), ('add', 'public_support', 1.0)],
+         [('add', 'legal_pressure', -2.0), ('add', 'public_support', 1.0),
+          ('add', 'neighborhood_budget', 20.0)],
          'https://journals.sagepub.com/doi/10.1177/10986111241289390'),
         ('Fund Private Security (pushout)', ROLE_NEIGHBORHOODS, {'neighborhood_budget': 120.0}, 0.10,
          [('add', 'public_support', 3.0), ('displace', 0.006), ('add', 'legal_pressure', 2.0)],
@@ -1230,7 +1241,8 @@ def _OPERATOR_SPEC():
          [('add', 'public_support', 1.6), ('add', 'legal_pressure', -1.2)],
          'https://www.tandfonline.com/doi/full/10.1080/10439463.2024.2362730'),
         ('Property Value Assistance (tax incentive)', ROLE_NEIGHBORHOODS, {'neighborhood_budget': 220.0}, 0.08,
-         [('add', 'permanent_units', 30.0), ('add', 'public_support', 0.9)],
+         [('add', 'permanent_units', 30.0), ('add', 'public_support', 0.9),
+          ('add', 'neighborhood_budget', 45.0)],
          'https://housing-infrastructure.canada.ca/homelessness-sans-abri/reports-rapports/shelter-cap-hebergement-2024-eng.html'),
         ('Neighborhood-led Transitional Housing Project', ROLE_NEIGHBORHOODS, {'neighborhood_budget': 300.0}, 0.12,
          [('add', 'transitional_units', 90.0), ('mulp', 'pop_families', -0.06), ('add', 'policy_momentum', 1.2)],
@@ -1241,7 +1253,8 @@ def _OPERATOR_SPEC():
 
         # --- BUSINESS (1) ---
         ('Tax Incentives for Affordable Housing', ROLE_BUSINESS, {'business_budget': 260.0}, 0.12,
-         [('sched', 'perm', 120), ('add', 'economy_index', 1.8), ('add', 'public_support', 1.2)],
+         [('sched', 'perm', 120), ('add', 'economy_index', 1.8), ('add', 'public_support', 1.2),
+          ('add', 'business_budget', 55.0)],
          'https://endhomelessness.org/state-of-homelessness/'),
         ('Fund Job Readiness Programs', ROLE_BUSINESS, {'business_budget': 180.0}, 0.06,
          [('mulp', 'pop_families', -0.05), ('mulp', 'pop_youth', -0.12), ('add', 'public_support', 2.2)],
@@ -1262,7 +1275,8 @@ def _OPERATOR_SPEC():
          [('add', 'public_support', 2.8), ('mulp', 'pop_chronic', -0.02)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC8356292/'),
         ('Small Business Microgrants to Hire', ROLE_BUSINESS, {'business_budget': 140.0}, 0.02,
-         [('add', 'economy_index', 1.2), ('add', 'public_support', 1.0)],
+         [('add', 'economy_index', 1.2), ('add', 'public_support', 1.0),
+          ('add', 'business_budget', 35.0)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC8356292/'),
         ('Sponsor Transitional Unit Conversions', ROLE_BUSINESS, {'business_budget': 280.0}, 0.08,
          [('add', 'transitional_units', 70.0), ('add', 'policy_momentum', 0.9)],
@@ -1276,7 +1290,7 @@ def _OPERATOR_SPEC():
         ('Sponsor University Pilot (housing innovation)', ROLE_BUSINESS,
          {'business_budget': 240.0, 'university_budget': 50.0}, 0.07,
          [('add', 'transitional_units', 40.0), ('add', 'policy_momentum', 1.0),
-          ('add', 'university_budget', 35.0)],
+          ('add', 'university_budget', 25.0)],
          'https://www.hiltonfoundation.org/learning/evaluation-of-housing-for-health-permanent-supportive-housing-program'),
 
         # --- MEDICAL (2) ---
@@ -1284,7 +1298,8 @@ def _OPERATOR_SPEC():
          [('add', 'medical_vans', 2.0), ('mulp', 'pop_chronic', -0.06), ('add', 'public_support', 2.8)],
          'https://www.commonwealthfund.org/publications/case-study/2021/aug/how-medical-respite-care-program-offers-pathway-health-housing'),
         ('Medicaid & Benefits Enrollment Drive', ROLE_MEDICAL, {'medical_budget': 160.0}, 0.05,
-         [('mulp', 'pop_chronic', -0.07), ('add', 'policy_momentum', 1.2)],
+         [('mulp', 'pop_chronic', -0.07), ('add', 'policy_momentum', 1.2),
+          ('add', 'medical_budget', 45.0)],
          'https://www.samhsa.gov/'),
         ('Substance Use Treatment Expansion', ROLE_MEDICAL, {'medical_budget': 320.0}, 0.18,
          [('mulp', 'pop_chronic', -0.12), ('add', 'public_support', -1.0), ('add', 'policy_momentum', 2.8)],
@@ -1308,7 +1323,8 @@ def _OPERATOR_SPEC():
          [('add', 'medical_vans', 1.0), ('mulp', 'pop_chronic', -0.04)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC8356292'),
         ('Performance-based Funding for Treatment Outcomes', ROLE_MEDICAL, {'medical_budget': 240.0}, 0.12,
-         [('add', 'policy_momentum', 1.8), ('add', 'public_support', -0.8)],
+         [('add', 'policy_momentum', 1.8), ('add', 'public_support', -0.8),
+          ('add', 'medical_budget', 75.0)],
          'https://www.hsri.org/projects/evaluating-samhsa-four-homelessness-programs-and-resources'),
         ('Veterans Health Focus', ROLE_MEDICAL, {'medical_budget': 160.0}, 0.06,
          [('mulp', 'pop_veterans', -0.10), ('add', 'policy_momentum', 1.0)],
@@ -1316,7 +1332,7 @@ def _OPERATOR_SPEC():
         ('Evaluation of Health Interventions (data)', ROLE_MEDICAL,
          {'medical_budget': 80.0, 'university_budget': 60.0}, 0.03,
          [('add', 'policy_momentum', 1.4), ('add', 'public_support', 0.6),
-          ('add', 'university_budget', 30.0)],
+          ('add', 'medical_budget', 25.0)],
          'https://www.hsri.org/projects/evaluating-samhsa-four-homelessness-programs-and-resources'),
 
         # --- UNIVERSITY (4) ---
@@ -1324,49 +1340,40 @@ def _OPERATOR_SPEC():
          [('add', 'policy_momentum', 1.5), ('add', 'university_budget', 60.0)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC1525292/'),
         ('Service-Learning & Workforce Integration', ROLE_UNIVERSITY, {'university_budget': 110.0}, 0.04,
-         [('add', 'social_workers', 5.0), ('mulp', 'pop_youth', -0.10), ('add', 'public_support', 1.2),
-          ('add', 'university_budget', 35.0)],
+         [('add', 'social_workers', 5.0), ('mulp', 'pop_youth', -0.10), ('add', 'public_support', 1.2)],
          'https://www.usich.gov/sites/default/files/document/Evidence-Behind-Approaches-That-End-Homelessness-Brief-2019.pdf'),
         ('Housing Innovation Lab (modular units)', ROLE_UNIVERSITY, {'university_budget': 260.0}, 0.10,
          [('sched', 'trans', 70), ('mulp', 'pop_chronic', -0.03), ('add', 'policy_momentum', 2.0),
           ('add', 'university_budget', 100.0)],
          'https://www.hiltonfoundation.org/learning/evaluation-of-housing-for-health-permanent-supportive-housing-program'),
         ('Reputation Management (PR)', ROLE_UNIVERSITY, {'university_budget': 80.0}, 0.02,
-         [('add', 'public_support', 0.6), ('add', 'policy_momentum', -0.4),
-          ('add', 'university_budget', 45.0)],
+         [('add', 'public_support', 0.6), ('add', 'policy_momentum', -0.4)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC1525292/'),
         ('Open Data & Dashboard (public transparency)', ROLE_UNIVERSITY, {'university_budget': 70.0}, 0.02,
-         [('add', 'policy_momentum', 0.8), ('add', 'public_support', 0.5),
-          ('add', 'university_budget', 45.0)],
+         [('add', 'policy_momentum', 0.8), ('add', 'public_support', 0.5)],
          'https://www.usich.gov/'),
         ('Student Outreach & Volunteer Corps', ROLE_UNIVERSITY, {'university_budget': 90.0}, 0.03,
-         [('add', 'outreach_teams', 2.0), ('mulp', 'pop_youth', -0.06), ('add', 'public_support', 1.0),
-          ('add', 'university_budget', 30.0)],
+         [('add', 'outreach_teams', 2.0), ('mulp', 'pop_youth', -0.06), ('add', 'public_support', 1.0)],
          'https://www.usich.gov/sites/default/files/document/Evidence-Behind-Approaches-That-End-Homelessness-Brief-2019.pdf'),
         ('Policy Incubator with City (pilot)', ROLE_UNIVERSITY,
          {'university_budget': 220.0, 'neighborhood_budget': 60.0}, 0.08,
-         [('add', 'permanent_units', 30.0), ('add', 'policy_momentum', 1.6),
-          ('add', 'university_budget', 85.0)],
+         [('add', 'permanent_units', 30.0), ('add', 'policy_momentum', 1.6)],
          'https://www.usich.gov/sites/default/files/document/Evidence-Behind-Approaches-That-End-Homelessness-Brief-2019.pdf'),
         ('Deploy Evaluation Fellows to Shelters', ROLE_UNIVERSITY, {'university_budget': 110.0}, 0.03,
-         [('add', 'social_workers', 2.0), ('add', 'policy_momentum', 1.0),
-          ('add', 'university_budget', 50.0)],
+         [('add', 'social_workers', 2.0), ('add', 'policy_momentum', 1.0)],
          'https://www.hsri.org/projects/evaluating-samhsa-four-homelessness-programs-and-resources'),
         ('Community-engaged Research on Displacement', ROLE_UNIVERSITY, {'university_budget': 140.0}, 0.05,
-         [('add', 'policy_momentum', 1.8), ('add', 'public_support', 0.5),
-          ('add', 'university_budget', 65.0)],
+         [('add', 'policy_momentum', 1.8), ('add', 'public_support', 0.5)],
          'https://pmc.ncbi.nlm.nih.gov/articles/PMC1525292/'),
         ('Leverage Philanthropy for PSH', ROLE_UNIVERSITY, {'university_budget': 260.0}, 0.09,
          [('sched', 'perm', 50), ('add', 'policy_momentum', 1.2),
           ('add', 'university_budget', 140.0)],
          'https://www.hiltonfoundation.org/learning/evaluation-of-housing-for-health-permanent-supportive-housing-program'),
         ('Student-led Rapid Rehousing Pilot', ROLE_UNIVERSITY, {'university_budget': 120.0}, 0.06,
-         [('add', 'transitional_units', 40.0), ('mulp', 'pop_youth', -0.08),
-          ('add', 'university_budget', 45.0)],
+         [('add', 'transitional_units', 40.0), ('mulp', 'pop_youth', -0.08)],
          'https://nlihc.org/sites/default/files/Housing-First-Evidence.pdf'),
         ('Academic Advocacy Campaign', ROLE_UNIVERSITY, {'university_budget': 80.0}, 0.03,
-         [('add', 'public_support', 0.9), ('add', 'policy_momentum', 0.6),
-          ('add', 'university_budget', 35.0)],
+         [('add', 'public_support', 0.9), ('add', 'policy_momentum', 0.6)],
          'https://nlihc.org/'),
     ]
 
