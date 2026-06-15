@@ -756,13 +756,14 @@
 
   function renderOps(ops, isMyTurn) {
     const list = document.getElementById('ops-list');
-    if (!ops || ops.length === 0) {
+    const visibleOps = (ops || []).filter(op => op.applicable);
+    if (visibleOps.length === 0) {
       list.innerHTML =
         '<li style="color:#aaa; font-style:italic; font-size:.9rem;">No operators available</li>';
       return;
     }
     let html = '';
-    for (const op of ops) {
+    for (const op of visibleOps) {
       const canApply = isMyTurn && op.applicable;
       const hasParams = op.params && op.params.length > 0;
       const isFileEdit = hasParams && op.params.some(p => p.type === 'file_edit');
@@ -787,13 +788,14 @@
   function renderFsOps(ops, isMyTurn) {
     const list = document.getElementById('fs-ops-list');
     if (!list) return;
-    if (!ops || ops.length === 0) {
+    const visibleOps = (ops || []).filter(op => op.applicable);
+    if (visibleOps.length === 0) {
       list.innerHTML =
         '<li style="color:#aaa; font-style:italic; font-size:.85rem;">No operators</li>';
       return;
     }
     let html = '';
-    for (const op of ops) {
+    for (const op of visibleOps) {
       const canApply = isMyTurn && op.applicable;
       html += `<li><button class="${canApply ? 'applicable' : ''}"
                    data-op-name="${op.name.replace(/"/g,'&quot;')}"

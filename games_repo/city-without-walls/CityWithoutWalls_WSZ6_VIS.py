@@ -31,6 +31,8 @@ def _render_intro(state) -> str:
 .cww-intro .lose {{ background: #fff3e0; border-color: #ffcc80; }}
 .cww-intro .card h2 {{ margin: 0 0 10px; font-size: 1rem; }}
 .cww-intro ul {{ margin: 0; padding-left: 1.15rem; line-height: 1.55; font-size: 0.92rem; }}
+.cww-intro .note {{ margin: 1rem 0 0; padding: 12px; background: #f1f8e9; border-radius: 8px;
+  font-size: 0.9rem; border: 1px solid #aed581; }}
 .cww-intro .cta {{ margin-top: 1rem; padding: 12px; background: #e3f2fd; border-radius: 8px;
   font-size: 0.9rem; border: 1px solid #90caf9; }}
 </style>
@@ -58,6 +60,11 @@ def _render_intro(state) -> str:
     </ul>
   </div>
 </div>
+<p class="note">
+  <strong>Operator availability:</strong> once play begins, each stakeholder turn shows only
+  <strong>5 randomly selected available operators</strong>. Other possible operators are hidden
+  until they are sampled on a later turn.
+</p>
 <p class="cta">
   <strong>Next step:</strong> in the operator list, the <strong>Neighborhoods</strong> player
   (first in the cycle) chooses <strong>Review goals &amp; begin simulation</strong> once
@@ -180,7 +187,7 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .progress-track {{ height: 8px; overflow: hidden; border-radius: 999px;
   background: rgba(255,255,255,.28); }}
 .cww-vis .progress-fill {{ height: 100%; border-radius: inherit;
-  background: linear-gradient(90deg, #ffca28, #66bb6a); }}
+  background: linear-gradient(90deg, #66bb6a, #ff9800); }}
 .cww-vis .metric {{ display: flex; justify-content: space-between; margin: 4px 0; }}
 .cww-vis .banner {{ padding: 10px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }}
 .cww-vis .banner.win {{ background: #e8f5e9; color: #1b5e20; }}
@@ -194,7 +201,7 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 </style>
 {status_banner}
 <div class="status-bar">
-  <div class="status-item"><span>Total homeless</span><strong>{homeless:,}</strong></div>
+  <div class="status-item"><span>Active turn</span><strong>{_esc(rname)}</strong></div>
   <div class="status-item budget-menu">
     <span>{_esc(own_budget_label)} budget</span><strong>{own_budget_value}</strong>
     <button class="budget-toggle" type="button">show all</button>
@@ -202,15 +209,14 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
   </div>
   <div class="homeless-progress">
     <div class="progress-labels">
-      <span>Current homeless: <strong>{homeless:,}</strong></span>
       <span>Goal: <strong>{goal_homeless:,}</strong></span>
+      <span>Current homeless: <strong>{homeless:,}</strong></span>
     </div>
     <div class="progress-track"><div class="progress-fill" style="width:{homeless_progress:.1f}%"></div></div>
   </div>
 </div>
 <h1>City Without Walls</h1>
-<p class="sub">Round <strong>{gr}</strong> · Active turn: <strong>{_esc(rname)}</strong>
- · Your role index: {role_num}</p>
+<p class="sub">Round <strong>{gr}</strong> · Your role index: {role_num}</p>
 <div class="grid">
   <div class="card">
     <h2>Population &amp; pressure</h2>
