@@ -552,9 +552,7 @@ def _make_transition(
             f'Homeless≈{ns.homeless_population}  support={ns.public_support:.1f}  '
             f'legal={ns.legal_pressure:.1f}\n'
             f'---\n'
-            f'Policy note: {fact}\n'
-            f'---\n'
-            f'Learn more: {url}'
+            f'Policy note: {fact}'
         )
         ns.jit_transition = summary
         _snap_metrics(ns)
@@ -651,9 +649,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
                 'Publish Independent Report\n'
                 '+5 public support, +2 policy momentum\n'
                 '---\n'
-                f'Policy note: {_pub_fact}\n'
-                '---\n'
-                f'Learn more: {_pub_url}'
+                f'Policy note: {_pub_fact}'
             )
             ns.round_actors.append(ROLE_OBSERVER)
             _snap_metrics(ns)
