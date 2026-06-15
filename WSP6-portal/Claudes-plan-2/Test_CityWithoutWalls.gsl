@@ -44,29 +44,29 @@ Assert_state        current_role_num  0
 
 # --- Round 1 (one moderate operator per role) ---------------------------
 
-Op Alice "Civic Forum: reduce tensions [legal pressure -2, public support +1]"
-Op Bob   "Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]"
-Op Carol "Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]"
+Op Alice "Media Campaign: reframe homelessness [public support +6, legal pressure -3]"
+Op Bob   "Fund Job Readiness Programs [families -5%, youth -12%, public support +2.2]"
+Op Carol "Deploy Mobile Clinics [medical vans +2, chronic homelessness -6%, public support +2.8]"
 Op Dave  "Volunteer Training: social workers +3 [social workers +3, public support +1]"
-Op Eve   "Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]"
+Op Eve   "Research & Program Evaluation [policy momentum +1.5]"
 
 Assert_state  game_round           2
-Assert_state  homeless_population  10815
-Assert_state  public_support       54.0
-Assert_state  legal_pressure       10.97
+Assert_state  homeless_population  10283
+Assert_state  public_support       63.0
+Assert_state  legal_pressure       8.5
 
 
 # --- Round 2 ----------------------------------------------------------
 
-Op Alice "Civic Forum: reduce tensions [legal pressure -2, public support +1]"
-Op Bob   "Volunteer Street Ambassadors [outreach teams +2, public support +1.5, youth -5%]"
-Op Carol "Expand Telehealth for Unhoused [policy momentum +0.6, public support +0.5]"
-Op Dave  "Volunteer Training: social workers +3 [social workers +3, public support +1]"
-Op Eve   "Open Data & Dashboard: public transparency [policy momentum +0.8, public support +0.5]"
+Op Alice "Block New Low-Income Development: NIMBY action [permanent units -50, public support +2, legal pressure +4]"
+Op Bob   "Tax Incentives for Affordable Housing [permanent units +120 scheduled, economy index +1.8, public support +1.2]"
+Op Carol "Medicaid & Benefits Enrollment Drive [chronic homelessness -7%, policy momentum +1.2]"
+Op Dave  "Emergency Expansion: beds +300 [shelter capacity +300 scheduled, families -10%, veterans -12%]"
+Op Eve   "Service-Learning & Workforce Integration [social workers +5, youth -10%, public support +1.2]"
 
 Assert_state  game_round           3
-Assert_state  homeless_population  10931
-Assert_state  public_support       57.5
-Assert_state  legal_pressure       10.47
+Assert_state  homeless_population  9703
+Assert_state  public_support       66.4
+Assert_state  legal_pressure       14.0
 
 Assert_phase  playing
