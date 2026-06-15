@@ -40,7 +40,8 @@ def _render_intro(state) -> str:
 <p class="lead">
   Five stakeholder roles negotiate housing, health, and street conditions while homelessness,
   public opinion, and legal pressure shift each round. Before the first move, confirm how the
-  city <strong>wins</strong> or <strong>loses</strong> below.
+  city <strong>wins</strong> or <strong>loses</strong> below. Each player acts as a
+  representative for their individual interest group.
 </p>
 <div class="cols">
   <div class="card win">
@@ -66,9 +67,8 @@ def _render_intro(state) -> str:
   until they are sampled on a later turn.
 </p>
 <p class="cta">
-  <strong>Next step:</strong> in the operator list, the <strong>Neighborhoods</strong> player
-  (first in the cycle) chooses <strong>Review goals &amp; begin simulation</strong> once
-  everyone has read this screen.
+  <strong>Next step:</strong> the <strong>first player</strong> should begin the simulation
+  by choosing <strong>Review goals &amp; begin simulation</strong> once everyone has read this screen.
 </p>
 </article>'''
 
@@ -81,6 +81,19 @@ def _esc(s: str) -> str:
         .replace('>', '&gt;')
         .replace('"', '&quot;')
     )
+
+
+def _stat_class(deltas: dict, key: str) -> str:
+    delta = float(deltas.get(key, 0) or 0)
+    if delta > 0:
+        return ' stat-up'
+    if delta < 0:
+        return ' stat-down'
+    return ''
+
+
+def _stat_value(value: str, deltas: dict, key: str) -> str:
+    return f'<strong class="stat-num{_stat_class(deltas, key)}">{value}</strong>'
 
 
 def render_state(state, role_num: int = 0, base_url: str = '') -> str:
@@ -119,17 +132,28 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
         ('Shelters', getattr(state, 'shelter_budget', 0)),
         ('University', getattr(state, 'university_budget', 0)),
     ]
+    budget_keys = (
+        'neighborhood_budget', 'business_budget', 'medical_budget',
+        'shelter_budget', 'university_budget'
+    )
+    metric_deltas = getattr(state, 'last_metric_deltas', {}) or {}
     own_budget_label = 'Observer'
     own_budget_value = 'N/A'
+    own_budget_key = ''
     if 0 <= role_num < len(budget_rows):
         own_budget_label, own_budget = budget_rows[role_num]
-        own_budget_value = f'{own_budget:,.0f} k$'
+        own_budget_key = budget_keys[role_num]
+        own_budget_value = _stat_value(f'{own_budget:,.0f} k$', metric_deltas, own_budget_key)
 
     other_budget_rows = ''.join(
-        f'<div class="budget-row"><span>{_esc(label)}</span><strong>{val:,.0f} k$</strong></div>'
+        f'<div class="budget-row"><span>{_esc(label)}</span>'
+        f'{_stat_value(f"{val:,.0f} k$", metric_deltas, budget_keys[i])}</div>'
         for i, (label, val) in enumerate(budget_rows)
         if i != role_num
     )
+
+    def _metric(label: str, value: str, key: str) -> str:
+        return f'<div class="metric"><span>{label}</span>{_stat_value(value, metric_deltas, key)}</div>'
 
     learn_title = getattr(state, 'learn_move_title', None)
     learn_fact = getattr(state, 'learn_fact', None)
@@ -168,6 +192,21 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .status-item {{ display: inline-flex; align-items: baseline; gap: 6px;
   font-size: 0.9rem; }}
 .cww-vis .status-item strong {{ font-size: 1rem; font-variant-numeric: tabular-nums; }}
+.cww-vis .stat-num {{ display: inline-block; font-variant-numeric: tabular-nums; }}
+.cww-vis .stat-up {{ color: #2e7d32; animation: cwwStatUp 900ms ease-out; }}
+.cww-vis .stat-down {{ color: #e65100; animation: cwwStatDown 900ms ease-out; }}
+.cww-vis .stat-up::after {{ content: ' ↑'; font-size: .82em; }}
+.cww-vis .stat-down::after {{ content: ' ↓'; font-size: .82em; }}
+@keyframes cwwStatUp {{
+  0% {{ transform: translateY(0); filter: brightness(1); }}
+  35% {{ transform: translateY(-4px); filter: brightness(1.35); }}
+  100% {{ transform: translateY(0); filter: brightness(1); }}
+}}
+@keyframes cwwStatDown {{
+  0% {{ transform: translateY(0); filter: brightness(1); }}
+  35% {{ transform: translateY(4px); filter: brightness(1.35); }}
+  100% {{ transform: translateY(0); filter: brightness(1); }}
+}}
 .cww-vis .budget-menu {{ position: relative; display: inline-flex; align-items: center; gap: 8px; }}
 .cww-vis .budget-toggle {{ border: 1px solid rgba(255,255,255,.65); border-radius: 999px;
   background: rgba(255,255,255,.16); color: #fff; padding: 3px 9px; font-size: 0.78rem;
@@ -203,14 +242,14 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 <div class="status-bar">
   <div class="status-item"><span>Active turn</span><strong>{_esc(rname)}</strong></div>
   <div class="status-item budget-menu">
-    <span>{_esc(own_budget_label)} budget</span><strong>{own_budget_value}</strong>
+    <span>{_esc(own_budget_label)} budget</span>{own_budget_value}
     <button class="budget-toggle" type="button">show all</button>
     <div class="budget-dropdown">{other_budget_rows}</div>
   </div>
   <div class="homeless-progress">
     <div class="progress-labels">
       <span>Goal: <strong>{goal_homeless:,}</strong></span>
-      <span>Current homeless: <strong>{homeless:,}</strong></span>
+      <span>Current homeless: {_stat_value(f'{homeless:,}', metric_deltas, 'homeless')}</span>
     </div>
     <div class="progress-track"><div class="progress-fill" style="width:{homeless_progress:.1f}%"></div></div>
   </div>
@@ -220,19 +259,19 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 <div class="grid">
   <div class="card">
     <h2>Population &amp; pressure</h2>
-    <div class="metric"><span>Public support (0–100)</span><strong>{sup:.1f}</strong></div>
-    <div class="metric"><span>Legal pressure</span><strong>{leg:.1f}</strong></div>
-    <div class="metric"><span>Policy momentum</span><strong>{mom:.1f}</strong></div>
-    <div class="metric"><span>Economy index</span><strong>{econ:.1f}</strong></div>
-    <div class="metric"><span>Displaced (cum.)</span><strong>{disp:,.0f}</strong></div>
+    {_metric('Public support (0–100)', f'{sup:.1f}', 'public_support')}
+    {_metric('Legal pressure', f'{leg:.1f}', 'legal_pressure')}
+    {_metric('Policy momentum', f'{mom:.1f}', 'policy_momentum')}
+    {_metric('Economy index', f'{econ:.1f}', 'economy_index')}
+    {_metric('Displaced (cum.)', f'{disp:,.0f}', 'displaced')}
   </div>
   <div class="card">
     <h2>Housing capacity</h2>
-    <div class="metric"><span>Shelter beds</span><strong>{sc:,.0f}</strong></div>
-    <div class="metric"><span>Transitional</span><strong>{tu:,.0f}</strong></div>
-    <div class="metric"><span>Permanent</span><strong>{pu:,.0f}</strong></div>
-    <div class="metric"><span>Total units</span><strong>{cap:,.0f}</strong></div>
-    <div class="metric"><span>Utilization</span><strong>{(homeless / max(1, cap)):.2f}</strong></div>
+    {_metric('Shelter beds', f'{sc:,.0f}', 'shelter_capacity')}
+    {_metric('Transitional', f'{tu:,.0f}', 'transitional_units')}
+    {_metric('Permanent', f'{pu:,.0f}', 'permanent_units')}
+    {_metric('Total units', f'{cap:,.0f}', 'total_units')}
+    {_metric('Utilization', f'{(homeless / max(1, cap)):.2f}', 'utilization')}
   </div>
 </div>
 {learn_block}

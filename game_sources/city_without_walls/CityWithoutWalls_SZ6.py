@@ -129,6 +129,7 @@ class CityWithoutWalls_State(sz.SZ_State):
             self.chronic_reduce_med = 0.0
             self.chronic_reduce_shel = 0.0
             self.observer_report_used = False
+            self.last_metric_deltas: dict[str, float] = {}
             # Last move — surfaced in VIS as “Policy context” (learning snippets).
             self.learn_move_title: str | None = None
             self.learn_fact: str | None = None
@@ -185,6 +186,7 @@ class CityWithoutWalls_State(sz.SZ_State):
             self.chronic_reduce_med = old.chronic_reduce_med
             self.chronic_reduce_shel = old.chronic_reduce_shel
             self.observer_report_used = old.observer_report_used
+            self.last_metric_deltas = dict(getattr(old, 'last_metric_deltas', {}))
             self.learn_move_title = old.learn_move_title
             self.learn_fact = old.learn_fact
             self.learn_source_url = old.learn_source_url
@@ -290,6 +292,7 @@ def _begin_simulation(state: CityWithoutWalls_State) -> CityWithoutWalls_State:
     ns = CityWithoutWalls_State(old=state)
     ns.phase = 'playing'
     ns.current_role_num = ns.play_order[0]
+    ns.last_metric_deltas = {}
     _assign_turn_operator_offer(ns, _macro_operator_list())
     ns.jit_transition = (
         'Simulation underway.\n'
@@ -453,6 +456,37 @@ def _check_immediate_terminal(st: CityWithoutWalls_State) -> None:
         st.phase = 'lost'
 
 
+def _metric_snapshot(st: CityWithoutWalls_State) -> dict[str, float]:
+    cap = st.shelter_capacity + st.transitional_units + st.permanent_units
+    return {
+        'homeless': float(st.homeless_population),
+        'public_support': float(st.public_support),
+        'legal_pressure': float(st.legal_pressure),
+        'policy_momentum': float(st.policy_momentum),
+        'economy_index': float(st.economy_index),
+        'displaced': float(st.displaced),
+        'shelter_capacity': float(st.shelter_capacity),
+        'transitional_units': float(st.transitional_units),
+        'permanent_units': float(st.permanent_units),
+        'total_units': float(cap),
+        'utilization': float(st.homeless_population / max(1.0, cap)),
+        'neighborhood_budget': float(st.neighborhood_budget),
+        'business_budget': float(st.business_budget),
+        'medical_budget': float(st.medical_budget),
+        'shelter_budget': float(st.shelter_budget),
+        'university_budget': float(st.university_budget),
+    }
+
+
+def _metric_deltas(before: dict[str, float], after: dict[str, float]) -> dict[str, float]:
+    deltas: dict[str, float] = {}
+    for key, after_value in after.items():
+        delta = after_value - before.get(key, after_value)
+        if abs(delta) > 1e-9:
+            deltas[key] = round(delta, 4)
+    return deltas
+
+
 def _assign_turn_operator_offer(st: CityWithoutWalls_State, operator_list: list) -> None:
     """Sample the action menu for the current stakeholder turn."""
     if st.phase != 'playing':
@@ -511,6 +545,46 @@ _SCHEDULE_LABELS = {
     'trans': 'transitional units',
     'perm': 'permanent units',
 }
+
+
+def _tuned_delta(attr: str, delta: float) -> float:
+    """Nudge operator effects toward easier goal achievement."""
+    if attr in ('shelter_capacity', 'transitional_units', 'permanent_units'):
+        return delta * (1.25 if delta > 0 else 0.50)
+    if attr in ('social_workers', 'outreach_teams', 'medical_vans'):
+        return delta * (1.20 if delta > 0 else 0.60)
+    if attr == 'public_support':
+        return delta * (1.25 if delta > 0 else 0.50)
+    if attr == 'legal_pressure':
+        return delta * (1.30 if delta < 0 else 0.50)
+    if attr == 'policy_momentum':
+        return delta * (1.25 if delta > 0 else 0.50)
+    if attr == 'economy_index':
+        return delta * (1.10 if delta > 0 else 0.50)
+    return delta
+
+
+def _tune_effect(effect: tuple) -> tuple:
+    kind = effect[0]
+    if kind == 'add':
+        _, attr, delta = effect
+        return ('add', attr, _tuned_delta(attr, delta))
+    if kind == 'mulp':
+        _, attr, frac = effect
+        if attr.startswith('pop_') and frac < 0:
+            return ('mulp', attr, frac * 1.40)
+        return effect
+    if kind == 'sched':
+        _, item, units = effect
+        return ('sched', item, int(round(units * 1.25)))
+    if kind == 'displace':
+        _, frac = effect
+        return ('displace', frac * 0.50)
+    return effect
+
+
+def _tune_effects(effects: list) -> list:
+    return [_tune_effect(effect) for effect in effects]
 
 
 def _fmt_number(value: float) -> str:
@@ -635,8 +709,10 @@ def _make_transition(
             return CityWithoutWalls_State(old=state)
         if state.current_role_num != role:
             return CityWithoutWalls_State(old=state)
+        before_metrics = _metric_snapshot(state)
         ns = CityWithoutWalls_State(old=state)
         ns.jit_transition = None
+        ns.last_metric_deltas = {}
         ns.move_seq += 1
         if costs:
             _pay(ns, costs)
@@ -670,6 +746,7 @@ def _make_transition(
         _check_immediate_terminal(ns)
         if ns.phase == 'playing':
             _advance_turn(ns, _macro_operator_list())
+        ns.last_metric_deltas = _metric_deltas(before_metrics, _metric_snapshot(ns))
         return ns
 
     return _xf
@@ -708,7 +785,8 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
         specs = _OPERATOR_SPEC()
         ops: list = [begin_op]
         for sp in specs:
-            base_name, role, costs, diff, effs, url = sp
+            base_name, role, costs, diff, raw_effs, url = sp
+            effs = _tune_effects(raw_effs)
             name = _format_operator_name(base_name, effs)
             learn = _LEARN_SNIPPETS.get(base_name, '')
             xf = _make_transition(name, role, costs, diff, effs, url, learn)
@@ -735,7 +813,10 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             ops.append(op)
 
         # Observer — publish (once)
-        _pub_effects = [('add', 'public_support', 5.0), ('add', 'policy_momentum', 2.0)]
+        _pub_effects = _tune_effects([
+            ('add', 'public_support', 5.0),
+            ('add', 'policy_momentum', 2.0),
+        ])
         _pub_name = _format_operator_name('Publish Independent Report', _pub_effects)
 
         def _pub_pre(s):
@@ -746,11 +827,12 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             return not s.observer_report_used
 
         def _pub_xf(s):
+            before_metrics = _metric_snapshot(s)
             ns = CityWithoutWalls_State(old=s)
             ns.jit_transition = None
+            ns.last_metric_deltas = {}
             ns.move_seq += 1
-            ns.public_support += 5.0
-            ns.policy_momentum += 2.0
+            _apply_effects(ns, ROLE_OBSERVER, _pub_effects, 1.0, float(ns.homeless_population))
             ns.observer_report_used = True
             _pub_fact = (
                 'Independent reporting and peer-reviewed syntheses help communities separate '
@@ -763,7 +845,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             ns.learn_source_url = _pub_url
             ns.jit_transition = (
                 f'{_pub_name}\n'
-                '+5 public support, +2 policy momentum\n'
+                f'{_format_effects(_pub_effects)}\n'
                 '---\n'
                 f'Policy note: {_pub_fact}'
             )
@@ -772,6 +854,7 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             _check_immediate_terminal(ns)
             if ns.phase == 'playing':
                 _advance_turn(ns, _macro_operator_list())
+            ns.last_metric_deltas = _metric_deltas(before_metrics, _metric_snapshot(ns))
             return ns
 
         _obs_pub_desc = (
@@ -796,13 +879,16 @@ class CityWithoutWalls_Operator_Set(sz.SZ_Operator_Set):
             return s.current_role_num == ROLE_OBSERVER
 
         def _pass_xf(s):
+            before_metrics = _metric_snapshot(s)
             ns = CityWithoutWalls_State(old=s)
             ns.jit_transition = 'Observer pass (no effect).'
+            ns.last_metric_deltas = {}
             ns.move_seq += 1
             ns.round_actors.append(ROLE_OBSERVER)
             _snap_metrics(ns)
             if ns.phase == 'playing':
                 _advance_turn(ns, _macro_operator_list())
+            ns.last_metric_deltas = _metric_deltas(before_metrics, _metric_snapshot(ns))
             return ns
 
         ops.append(sz.SZ_Operator(
