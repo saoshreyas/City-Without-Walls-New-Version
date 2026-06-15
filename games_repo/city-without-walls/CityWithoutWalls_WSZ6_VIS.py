@@ -170,8 +170,23 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
   </div>'''
 
     status_banner = ''
+    victory_block = ''
     if phase == 'won':
         status_banner = '<div class="banner win">Goal achieved — sustainable reduction path.</div>'
+        victory_block = f'''
+<section class="victory-screen">
+  <h2>Victory: homelessness has been significantly reduced</h2>
+  <p>
+    All stakeholders helped move the city into the goal range: homelessness is now
+    <strong>{homeless:,}</strong>, at or below the target of <strong>{goal_homeless:,}</strong>.
+  </p>
+  <p>
+    This does not mean homelessness has been fully eradicated. Some residents still need
+    stable housing, services, income support, healthcare, and legal protections. The next
+    steps are to keep expanding permanent housing, prevent new displacement, fund ongoing
+    services, and listen to people with lived experience so the progress continues.
+  </p>
+</section>'''
     elif phase == 'lost':
         status_banner = '<div class="banner loss">Simulation ended — crisis thresholds reached.</div>'
 
@@ -231,6 +246,10 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .banner {{ padding: 10px; border-radius: 6px; margin-bottom: 12px; font-weight: 600; }}
 .cww-vis .banner.win {{ background: #e8f5e9; color: #1b5e20; }}
 .cww-vis .banner.loss {{ background: #ffebee; color: #b71c1c; }}
+.cww-vis .victory-screen {{ margin-bottom: 12px; padding: 16px; border-radius: 10px;
+  background: #e8f5e9; border: 1px solid #81c784; color: #1b5e20; }}
+.cww-vis .victory-screen h2 {{ margin: 0 0 8px; font-size: 1.05rem; }}
+.cww-vis .victory-screen p {{ margin: 8px 0 0; line-height: 1.45; font-size: 0.92rem; }}
 .cww-vis .learn {{ border-left: 4px solid #1565c0; background: #e3f2fd; }}
 .cww-vis .learn h2 {{ color: #0d47a1; }}
 .cww-vis .learn-title {{ font-weight: 600; margin: 0 0 6px; font-size: 0.92rem; }}
@@ -239,6 +258,7 @@ def render_state(state, role_num: int = 0, base_url: str = '') -> str:
 .cww-vis .learn-src a {{ color: #0d47a1; }}
 </style>
 {status_banner}
+{victory_block}
 <div class="status-bar">
   <div class="status-item"><span>Active turn</span><strong>{_esc(rname)}</strong></div>
   <div class="status-item budget-menu">
