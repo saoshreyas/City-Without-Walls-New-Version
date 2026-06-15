@@ -1,0 +1,11 @@
+{
+  "slug": "rock-paper-scissors",
+  "name": "Rock-Paper-Scissors",
+  "version": "1.0",
+  "min_players": 2,
+  "max_players": 2,
+  "pff_file": "Rock_Paper_Scissors_SZ6.py",
+  "vis_file": "",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:06.841881Z"
+}

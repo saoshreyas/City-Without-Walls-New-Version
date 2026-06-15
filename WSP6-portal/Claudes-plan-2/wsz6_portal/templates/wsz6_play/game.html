@@ -1,0 +1,1186 @@
+{% extends "base.html" %}
+{% block title %}Game – WSZ6 Portal{% endblock %}
+
+{% block extra_head %}
+<style>
+  .game-wrap      { display: grid; grid-template-columns: 3fr 1fr; gap: 1rem; align-items: start; }
+  #state-display  { font-family: monospace; white-space: pre; background:#1e1e2e; color:#cdd6f4;
+                    padding:1.2rem; border-radius:6px; font-size:1rem; line-height:1.5; min-height:8rem; }
+  /* Shown instead of #state-display when the formulation provides vis_html. */
+  #vis-display    { padding:.8rem; overflow:auto; position:relative; }
+
+  /* ── M5: previous-state watermark ── */
+  #vis-display.showing-prev::before {
+    content: 'PREVIOUS STATE';
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: .18rem 0;
+    background: rgba(255,140,0,.16);
+    border-bottom: 2px solid rgba(255,140,0,.55);
+    color: rgba(255,160,0,.90);
+    font-size: .68rem; font-weight: 700; letter-spacing: .14em;
+    text-align: center; pointer-events: none; z-index: 5;
+  }
+  #ops-list       { list-style: none; }
+  #ops-list li    { margin-bottom:.4rem; }
+  #ops-list li button { width:100%; text-align:left; padding:.4rem .7rem; border-radius:4px;
+                        border:none; cursor:pointer; font-size:.9rem; background:#f0f4f8; }
+  #ops-list li button.applicable { background:#d4edda; color:#155724; }
+  #ops-list li button.applicable:hover { background:#c3e6cb; }
+  #ops-list li button:disabled { color:#aaa; cursor:not-allowed; }
+  .my-turn-banner { background:#d4edda; color:#155724; padding:.5rem .8rem;
+                    border-radius:4px; margin-bottom:.6rem; font-weight:600; }
+  .wait-banner    { background:#fff3cd; color:#856404; padding:.5rem .8rem;
+                    border-radius:4px; margin-bottom:.6rem; }
+  #status-bar     { padding:.4rem .8rem; background:#e8f4fd; border-radius:4px;
+                    font-size:.85rem; color:#0c5460; margin-bottom:.6rem; }
+  /* Persistent current-message bar (never auto-hides). */
+  #transition-msg { padding:.5rem .8rem; background:#f3e5f5; color:#4a148c;
+                    border-radius:4px; margin-bottom:.6rem; min-height:2.4rem; }
+  /* When empty (no transition yet) occupy space without showing the box. */
+  #transition-msg:empty { background:transparent; padding:0; min-height:1.5rem; }
+  /* Highlighted when a historical message is recalled. */
+  #transition-msg.history-recall { background:#ede7f6; outline:2px solid #9c27b0; }
+
+  /* ── Transition history panel ── */
+  #transition-history { margin-top:.75rem; }
+  #transition-history summary { cursor:pointer; padding:.35rem .6rem;
+    background:#f0f4f8; border-radius:4px; user-select:none;
+    color:#444; font-size:.85rem; }
+  #transition-history summary:hover { background:#e4eaf0; }
+  #history-list { margin:.4rem 0 0 0; padding:0 0 0 1.6rem;
+    max-height:16rem; overflow-y:auto; border-left:3px solid #e0d0ee; }
+  #history-list li { padding:.2rem .3rem; cursor:pointer;
+    border-radius:3px; color:#555; margin-bottom:.15rem; font-size:.85rem; }
+  #history-list li:hover { background:#f3e5f5; color:#4a148c; }
+  #history-list li.selected { background:#e8d5f0; color:#4a148c; font-weight:600; }
+  #goal-banner    { padding:.8rem 1rem; background:#d4edda; color:#155724;
+                    border-radius:4px; font-size:1.1rem; font-weight:700; display:none; }
+  #paused-banner  { padding:.8rem 1rem; background:#fff3cd; color:#856404;
+                    border-radius:4px; font-size:1rem; font-weight:600; display:none; }
+
+  /* ── Inline param form (int / float / str params) ── */
+  #param-form     { margin-top:.6rem; padding:.8rem; background:#f0f4f8;
+                    border:1px solid #d0d9e4; border-radius:4px; }
+  #param-form label { display:block; font-size:.85rem; font-weight:600; margin-bottom:.2rem; }
+  #param-form input { width:100%; padding:.3rem .5rem; border:1px solid #ccc;
+                      border-radius:4px; font-size:.9rem; box-sizing:border-box; }
+  .param-hint     { font-size:.75rem; color:#666; margin-top:.15rem; display:block; }
+
+  /* ── File-edit modal overlay ── */
+  #file-edit-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,.55);
+    display: none;                     /* flex when open */
+    align-items: center; justify-content: center;
+  }
+  #file-edit-modal {
+    background: #fff; border-radius: 8px;
+    width: min(860px, 92vw); height: min(82vh, 720px);
+    display: flex; flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,.3);
+    animation: feSlideIn .15s ease;
+  }
+  @keyframes feSlideIn {
+    from { opacity:0; transform:translateY(-12px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  #file-edit-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1.2rem; border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
+  }
+  #file-edit-header h2 { margin:0; font-size:1rem; color:#1a3a5c; }
+  #file-edit-wordcount { font-size:.82rem; color:#888; white-space:nowrap; }
+  #file-edit-area {
+    flex: 1; padding: 1.2rem 1.4rem;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.05rem; line-height: 1.75;
+    border: none; resize: none; outline: none;
+    color: #2c2c2c; background: #fefefe;
+    overflow-y: auto;
+  }
+  #file-edit-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .65rem 1.2rem; border-top: 1px solid #e0e0e0;
+    background: #f8f9fa; border-radius: 0 0 8px 8px; flex-shrink: 0;
+  }
+  #file-edit-footer .hint { font-size:.8rem; color:#999; }
+  #file-edit-footer .actions { display:flex; gap:.5rem; }
+
+  @media (max-width:700px) { .game-wrap { grid-template-columns: 1fr; } }
+
+  /* ── Role-view selector (shown only when player holds multiple roles) ── */
+  #role-selector { margin-bottom: .4rem; display: none; }
+  #role-selector span { font-size: .85rem; color: #555; }
+
+  /* ── Full-screen overlay ── */
+  #fs-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #111;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* vis-display sizing inside the overlay */
+  #fs-overlay #vis-display {
+    width: 100%; height: 100%;
+    max-width: none; padding: 1.5rem;
+    display: flex; align-items: center; justify-content: center;
+    overflow: auto; box-sizing: border-box;
+  }
+  /* Scale SVGs to fill the overlay */
+  #fs-overlay #vis-display svg { max-height: 90vh; width: 100%; }
+  /* ✕ button — always visible top-right */
+  #fs-close {
+    position: absolute; top: .8rem; right: .8rem;
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+    color: #fff; font-size: 1.1rem; line-height: 1;
+    width: 2.2rem; height: 2.2rem; border-radius: 50%;
+    cursor: pointer; z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #fs-close:hover { background: rgba(255,255,255,.32); }
+  /* Operator tray — slides up from bottom on pointer proximity */
+  #fs-op-tray {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(10,10,10,.82); backdrop-filter: blur(6px);
+    padding: .65rem 1rem;
+    transform: translateY(100%);
+    transition: transform .28s ease;
+    z-index: 10000;
+  }
+  #fs-op-tray.visible { transform: translateY(0); }
+  #fs-ops-list { list-style: none; margin: 0; padding: 0;
+                 display: flex; flex-wrap: wrap; gap: .4rem; }
+  #fs-ops-list li button {
+    background: rgba(255,255,255,.12); color: #eee;
+    border: 1px solid rgba(255,255,255,.25); border-radius: 4px;
+    padding: .35rem .75rem; cursor: pointer; font-size: .88rem;
+  }
+  #fs-ops-list li button.applicable {
+    background: rgba(80,180,100,.35); border-color: rgba(100,220,120,.6); color: #dfffdf;
+  }
+  #fs-ops-list li button.applicable:hover { background: rgba(80,180,100,.55); }
+  #fs-ops-list li button:disabled { opacity: .4; cursor: not-allowed; }
+  /* Entry button (shown only when vis is active) */
+  #fs-btn { margin-top: .5rem; display: none; }
+  /* M5: prev-toggle buttons (normal view + FS tray) */
+  .prev-toggle-btn {
+    background: rgba(255,140,0,.18); color: #c87800;
+    border: 1px solid rgba(255,140,0,.45); border-radius: 4px;
+    padding: .3rem .75rem; cursor: pointer; font-size: .85rem;
+  }
+  .prev-toggle-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .prev-toggle-btn:not(:disabled):hover { background: rgba(255,140,0,.32); }
+  /* FS tray controls row (sits above the ops list) */
+  #fs-tray-controls {
+    display: flex; gap: .5rem;
+    margin-bottom: .35rem; padding-bottom: .35rem;
+    border-bottom: 1px solid rgba(255,255,255,.12);
+  }
+
+  /* ── Tier 1: DOM element hover (SVG and HTML elements with data-* attrs) ── */
+  #vis-display [data-op-index],
+  #vis-display [data-info],
+  #vis-display [data-context]          { cursor: pointer; }
+
+  /* SVG elements: gold stroke on hover */
+  #vis-display svg [data-op-index]:hover,
+  #vis-display svg [data-info]:hover,
+  #vis-display svg [data-context]:hover {
+    stroke: #ffd700; stroke-width: 3px; stroke-opacity: 1;
+  }
+
+  /* HTML (non-SVG) elements: yellow-tint background on hover */
+  #vis-display :not(svg):not(svg *)[data-op-index]:hover,
+  #vis-display :not(svg):not(svg *)[data-info]:hover    {
+    background: rgba(255, 215, 0, 0.25);
+    outline: 2px solid #ffd700;
+    border-radius: 3px;
+  }
+
+  /* ── Info popup ── */
+  #vis-info-popup {
+    position: fixed; z-index: 10001;
+    background: rgba(20,20,30,.92); color: #eee;
+    padding: .5rem .8rem; border-radius: 6px;
+    font-size: .88rem; max-width: 280px;
+    line-height: 1.5; pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  }
+
+  /* ── Context menu ── */
+  #vis-ctx-menu {
+    position: fixed; z-index: 10001;
+    background: #fff; border: 1px solid #ccc;
+    border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    min-width: 150px; overflow: hidden;
+  }
+  #vis-ctx-menu ul { list-style: none; margin: 0; padding: .25rem 0; }
+  #vis-ctx-menu li { padding: .45rem .9rem; cursor: pointer; font-size: .88rem; }
+  #vis-ctx-menu li:hover { background: #f0f4f8; }
+  #vis-ctx-menu li.ctx-info { color: #555; font-style: italic; }
+
+  /* ── Tier 2: canvas overlay label tooltip ── */
+  #vis-region-label {
+    position: fixed; z-index: 10002;
+    background: rgba(0,0,0,.7); color: #fff;
+    padding: .2rem .5rem; border-radius: 4px;
+    font-size: .78rem; pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 id="game-title">Game</h1>
+<div id="status-bar">Connecting…</div>
+<div id="transition-msg"></div>
+<div id="goal-banner"></div>
+<div id="paused-banner"></div>
+
+<div class="game-wrap" data-gsl-phase="playing">
+
+  <!-- Left: game state display -->
+  <div>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div  id="vis-display"   style="display:none;"></div>
+      <pre  id="state-display">Loading…</pre>
+    </div>
+    <button id="fs-btn" class="btn btn-sm"
+            style="background:#444; color:#fff;"
+            onclick="enterFullscreen()">&#x26F6; Full Screen</button>
+    <button id="prev-btn" class="prev-toggle-btn"
+            style="margin-left:.4rem;"
+            onclick="togglePreviousState()"
+            disabled>&#x21D4; Show Previous</button>
+    <div id="player-identity"
+         style="display:none; font-size:.85rem; color:#555; margin-top:.4rem;"></div>
+    <div id="role-selector">
+      <span>Viewing as:</span>
+      <span id="role-selector-btns"></span>
+    </div>
+    <div id="turn-banner" style="margin-top:.5rem;"></div>
+    <details id="transition-history">
+      <summary>Transition History (<span id="history-count">0</span> moves)</summary>
+      <ol id="history-list"></ol>
+    </details>
+  </div>
+
+  <!-- Right: operator list + controls -->
+  <div class="card">
+    <h2>Operators</h2>
+    <ul id="ops-list"><li style="color:#aaa; font-style:italic; font-size:.9rem;">Waiting…</li></ul>
+
+    <!-- Inline param form (int / float / str params) -->
+    <div id="param-form" style="display:none;">
+      <strong id="param-op-name" style="display:block; margin-bottom:.5rem; font-size:.9rem;"></strong>
+      <div id="param-fields"></div>
+      <div style="margin-top:.6rem;">
+        <button class="btn btn-primary btn-sm" onclick="submitParams()">Apply</button>
+        <button class="btn btn-sm" style="margin-left:.4rem; background:#e8ecf0;"
+                onclick="cancelParams()">Cancel</button>
+      </div>
+    </div>
+
+    <hr style="margin:1rem 0; border-color:#e0e0e0;">
+    <button class="btn btn-warning btn-sm" onclick="sendUndo()" id="undo-btn" disabled>↩ Undo</button>
+    <button class="btn btn-primary btn-sm" onclick="sendHelp()" style="margin-left:.4rem;">? Help</button>
+    {% if is_owner %}
+    <button class="btn btn-secondary btn-sm" onclick="sendPause()" id="pause-btn" style="margin-left:.4rem;">⏸ Pause</button>
+    <button class="btn btn-success btn-sm" onclick="sendRematch()" id="rematch-btn" style="margin-left:.4rem; display:none;">↺ New Session with Same Players</button>
+    {% endif %}
+    <div id="help-msg" style="display:none; margin-top:.6rem; font-size:.85rem; color:#555;"></div>
+  </div>
+
+</div>
+
+<!-- ── Vis interaction: info popup ────────────────────────────────── -->
+<div id="vis-info-popup" style="display:none;"></div>
+
+<!-- ── Vis interaction: context menu ──────────────────────────────── -->
+<div id="vis-ctx-menu" style="display:none;">
+  <ul id="vis-ctx-list"></ul>
+</div>
+
+<!-- ── Tier 2: hover label (canvas regions) ───────────────────────── -->
+<div id="vis-region-label" style="display:none;"></div>
+
+<!-- ── Full-screen vis overlay ──────────────────────────────────────── -->
+<div id="fs-overlay" style="display:none;">
+  <button id="fs-close" onclick="exitFullscreen()" title="Exit (Esc)">&#x2715;</button>
+  <!-- #vis-display is moved here by enterFullscreen(), restored by exitFullscreen() -->
+  <div id="fs-op-tray">
+    <div id="fs-tray-controls">
+      <button class="prev-toggle-btn"
+              onclick="togglePreviousState()"
+              disabled>&#x21D4; Show Previous</button>
+    </div>
+    <ul id="fs-ops-list"></ul>
+  </div>
+</div>
+
+<!-- ── File-edit modal overlay ────────────────────────────────────────── -->
+<!-- Clicking the backdrop (outside the modal) cancels the edit. -->
+<div id="file-edit-overlay" onclick="if(event.target===this) cancelFileEdit();">
+  <div id="file-edit-modal">
+
+    <div id="file-edit-header">
+      <h2 id="file-edit-title">Edit</h2>
+      <span id="file-edit-wordcount">0 words</span>
+    </div>
+
+    <textarea id="file-edit-area" spellcheck="true"
+              placeholder="Start writing here…"></textarea>
+
+    <div id="file-edit-footer">
+      <span class="hint">Ctrl+Enter to save</span>
+      <div class="actions">
+        <button class="btn btn-sm" style="background:#e8ecf0;"
+                onclick="cancelFileEdit()">Cancel</button>
+        <button class="btn btn-success btn-sm"
+                onclick="saveFileEdit()">Save &amp; Apply</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const SESSION_KEY = "{{ session_key }}";
+  const ROLE_TOKEN  = "{{ role_token }}";
+  const WS_URL      = "{{ ws_url }}";
+
+  let ws             = null;
+  let myRoleNum      = -1;   // backward compat (= active role)
+  let myRoleNums     = [];   // all roles held by this player
+  let activeRoleNum  = -1;   // the role whose vis/ops are currently shown
+  let roleNames      = {};   // role_num -> name, from first state_update
+  let playerName     = '';   // display name for this tab's player
+  let gameOver       = false;
+  let reconnectCount = 0;
+  const MAX_RECONNECTS = 5;
+  let currentOps    = [];    // full operator list from the last state_update
+  let pendingOpIndex = null; // op awaiting param input from the user
+  let transitionHistory = []; // plain-text messages in arrival order
+
+  // ── Full-screen state ─────────────────────────────────────────────
+  let fsActive         = false;
+  let fsVisParent      = null;   // #vis-display's original parentNode
+  let fsVisNextSibling = null;   // original nextSibling for exact DOM restore
+  let fsLastIsMyTurn   = false;  // replayed into renderFsOps on each state_update
+
+  // ── Previous-state toggle (M5) ────────────────────────────────────
+  let currentVisHtml = '';    // vis_html from the most recent state_update
+  let prevVisHtml    = '';    // vis_html from one step earlier ('' at step 0)
+  let showingPrev    = false; // true while the toggle is showing prev state
+
+  // ── Tier-2 canvas hit-testing state ───────────────────────────────
+  let _regionDefs    = null;   // parsed Tier-2 region JSON (or null)
+  let _regionCanvas  = null;   // <canvas> overlay element (Tier 2)
+  let _hoveredRegion = null;   // currently hovered region def (Tier 2)
+
+  // ── File-edit modal setup (event listeners on static elements) ────────
+
+  const feArea  = document.getElementById('file-edit-area');
+  const feCount = document.getElementById('file-edit-wordcount');
+
+  feArea.addEventListener('input', _updateWordCount);
+  feArea.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); saveFileEdit(); }
+  });
+
+  function _updateWordCount() {
+    const text  = feArea.value.trim();
+    const count = text ? text.split(/\s+/).length : 0;
+    feCount.textContent = count + (count === 1 ? ' word' : ' words');
+  }
+
+  // ── Tier 1: DOM element interaction ──────────────────────────────
+  (function() {
+    const vd = document.getElementById('vis-display');
+
+    // Left-click: apply op (priority) or show info.
+    vd.addEventListener('click', function(e) {
+      closeInfoPopup(); closeCtxMenu();
+      const el = e.target.closest('[data-op-index],[data-info]');
+      if (!el) return;
+      if (el.dataset.opIndex !== undefined) {
+        const args = el.dataset.opArgs ? JSON.parse(el.dataset.opArgs) : undefined;
+        applyOp(parseInt(el.dataset.opIndex), args);
+      } else if (el.dataset.info) {
+        showInfoPopup(e.clientX, e.clientY, el.dataset.info);
+      }
+    });
+
+    // Right-click: context menu if data-context defined.
+    vd.addEventListener('contextmenu', function(e) {
+      const el = e.target.closest('[data-context]');
+      if (!el) return;
+      e.preventDefault();
+      closeInfoPopup();
+      const items = JSON.parse(el.dataset.context);
+      showCtxMenu(e.clientX, e.clientY, items);
+    });
+  })();
+
+  // ── Connection ──────────────────────────────────────────────────
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(proto + '://' + location.host + WS_URL);
+    ws.onopen    = () => { reconnectCount = 0; setStatus('Connected.'); };
+    ws.onmessage = (evt) => dispatch(JSON.parse(evt.data));
+    ws.onerror   = ()  => setStatus('WebSocket error — try refreshing.');
+    ws.onclose   = function(e) {
+      setStatus('Disconnected (code ' + e.code + ').');
+      // Auto-reconnect on abnormal closure (1006 = no close frame, typically a
+      // proxy timeout). Don't reconnect on intentional server closes (4xxx).
+      if (e.code === 1006 && !gameOver && reconnectCount < MAX_RECONNECTS) {
+        reconnectCount++;
+        setStatus('Connection lost — reconnecting (' + reconnectCount + '/' + MAX_RECONNECTS + ')…');
+        setTimeout(connect, 3000);
+      } else if (e.code === 1006 && !gameOver) {
+        setStatus('Connection lost. Please refresh the page.');
+      }
+    };
+  }
+
+  function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  // ── Message dispatch ─────────────────────────────────────────────
+
+  function dispatch(msg) {
+    if      (msg.type === 'state_update')      onStateUpdate(msg);
+    else if (msg.type === 'transition_msg')    onTransition(msg);
+    else if (msg.type === 'goal_reached')      onGoalReached(msg);
+    else if (msg.type === 'game_paused')       onGamePaused(msg);
+    else if (msg.type === 'new_session_ready') onNewSessionReady(msg);
+    else if (msg.type === 'help')              showHelp(msg.message);
+    else if (msg.type === 'error')             setStatus('⚠ ' + msg.message);
+  }
+
+  function onStateUpdate(msg) {
+    closeInfoPopup(); closeCtxMenu();
+    // Update role tracking.
+    if (msg.your_role_nums) myRoleNums = msg.your_role_nums;
+    activeRoleNum = (msg.your_role_num != null) ? msg.your_role_num : (myRoleNums[0] != null ? myRoleNums[0] : -1);
+    myRoleNum     = activeRoleNum;   // backward compat
+    // Capture player display name when provided (sent once on connect).
+    if (msg.player_name) playerName = msg.player_name;
+    // Populate role name map on first state_update (roles don't change mid-game).
+    if (msg.role_name_map && Object.keys(roleNames).length === 0) {
+      for (const [k, v] of Object.entries(msg.role_name_map)) roleNames[parseInt(k)] = v;
+    }
+    currentOps = msg.operators || [];
+
+    // Dismiss any open input UI if a new state arrives externally.
+    if (pendingOpIndex !== null) {
+      hideParamForm();
+      closeFileEditModal();
+      pendingOpIndex = null;
+    }
+
+    // Prefer SVG/HTML vis if the formulation provides it; fall back to text.
+    const visDisplay  = document.getElementById('vis-display');
+    const textDisplay = document.getElementById('state-display');
+    if (msg.vis_html) {
+      // M5: rotate cache before replacing; new move reverts toggle to current.
+      prevVisHtml    = currentVisHtml;
+      currentVisHtml = msg.vis_html;
+      showingPrev    = false;
+      visDisplay.classList.remove('showing-prev');
+      visDisplay.innerHTML      = msg.vis_html;
+      visDisplay.style.display  = '';
+      textDisplay.style.display = 'none';
+      setupHitCanvas();   // Tier 2: parse #wsz6-regions JSON if present
+      _updatePrevToggle();
+    } else {
+      prevVisHtml    = currentVisHtml;
+      currentVisHtml = '';
+      showingPrev    = false;
+      textDisplay.textContent   = msg.state_text || JSON.stringify(msg.state, null, 2);
+      textDisplay.style.display = '';
+      visDisplay.style.display  = 'none';
+      _updatePrevToggle();
+    }
+
+    // Show/hide the full-screen button; auto-exit if vis vanishes.
+    const fsBtn = document.getElementById('fs-btn');
+    if (msg.vis_html) {
+      fsBtn.style.display = 'inline-block';
+    } else {
+      fsBtn.style.display = 'none';
+      if (fsActive) exitFullscreen();
+    }
+
+    renderRoleSelector();
+
+    const isParallel = !!msg.is_parallel;
+    // In parallel mode any player whose role-scoped operators are still
+    // applicable can act; we don't gate on current_role_num.
+    const hasApplicableOps = currentOps.some(op => op.applicable);
+    const isMyTurn = !gameOver && !msg.is_goal && (
+      isParallel ? hasApplicableOps : myRoleNums.includes(msg.current_role_num)
+    );
+
+    const turnBanner = document.getElementById('turn-banner');
+    if (!gameOver && !msg.is_goal) {
+      if (isParallel) {
+        turnBanner.innerHTML = hasApplicableOps
+          ? '<div class="my-turn-banner">Make your choice!</div>'
+          : '<div class="wait-banner">Choice submitted — waiting for other player…</div>';
+      } else {
+        turnBanner.innerHTML = isMyTurn
+          ? '<div class="my-turn-banner">Your turn!</div>'
+          : '<div class="wait-banner">Waiting for another player…</div>';
+      }
+    }
+
+    // Undo is always disabled during a parallel phase (and blocked server-side
+    // for any move that came from a parallel state).
+    document.getElementById('undo-btn').disabled =
+      (msg.step === 0 || gameOver || msg.is_goal || isParallel);
+    setStatus('Step ' + msg.step + (msg.is_goal ? ' — Goal reached!' : ''));
+    document.getElementById('state-display').dataset.gslStep = msg.step;
+    renderOps(msg.operators, isMyTurn);
+    fsLastIsMyTurn = isMyTurn;
+    if (fsActive) renderFsOps(currentOps, isMyTurn);
+
+    if (msg.is_goal && !gameOver) {
+      gameOver = true;
+      document.getElementById('turn-banner').innerHTML = '';
+      const gameWrap = document.querySelector('[data-gsl-phase]');
+      if (gameWrap) gameWrap.dataset.gslPhase = 'ended';
+      showGoal('Goal reached at step ' + msg.step + '!');
+    }
+  }
+
+  function onTransition(msg) {
+    // Show persistently — no auto-dismiss.
+    const el = document.getElementById('transition-msg');
+    el.textContent = msg.message;
+    // If a historical recall was showing, clear its highlight.
+    el.classList.remove('history-recall');
+    document.querySelectorAll('#history-list li.selected')
+      .forEach(l => l.classList.remove('selected'));
+
+    // Append to history list.
+    transitionHistory.push(msg.message);
+    const idx = transitionHistory.length - 1;
+    const list = document.getElementById('history-list');
+    const li = document.createElement('li');
+    li.dataset.idx = idx;
+    li.textContent = msg.message;
+    li.title = 'Click to re-display';
+    li.addEventListener('click', function() { recallHistoryItem(this); });
+    list.appendChild(li);
+    list.scrollTop = list.scrollHeight; // keep newest visible
+
+    document.getElementById('history-count').textContent = transitionHistory.length;
+  }
+
+  function recallHistoryItem(liEl) {
+    // Show a past message in the current-message bar with a visual indicator.
+    // It stays until the next real transition arrives.
+    const text = transitionHistory[parseInt(liEl.dataset.idx)];
+    if (text === undefined) return;
+    const el = document.getElementById('transition-msg');
+    el.textContent = text;
+    el.classList.add('history-recall');
+    document.querySelectorAll('#history-list li.selected')
+      .forEach(l => l.classList.remove('selected'));
+    liEl.classList.add('selected');
+  }
+
+  // ── Role-view selector ────────────────────────────────────────────
+
+  function renderRoleSelector() {
+    // Always update the player-identity badge when we have a name.
+    const identityEl = document.getElementById('player-identity');
+    if (playerName && identityEl) {
+      const activeRoleName = roleNames[activeRoleNum] || null;
+      if (myRoleNums.length <= 1 && activeRoleName) {
+        identityEl.textContent = 'Playing as: ' + playerName + ' (' + activeRoleName + ')';
+      } else if (playerName) {
+        identityEl.textContent = 'Playing as: ' + playerName;
+      }
+      identityEl.style.display = 'block';
+    }
+
+    // Role-switch buttons are only needed when the player holds multiple roles.
+    const el = document.getElementById('role-selector');
+    if (myRoleNums.length <= 1) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const btnContainer = document.getElementById('role-selector-btns');
+    let html = '';
+    for (const rn of myRoleNums) {
+      const name     = roleNames[rn] || ('Role ' + rn);
+      const isActive = (rn === activeRoleNum);
+      html += `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline-secondary'}"
+                       style="margin-left:.3rem;"
+                       onclick="selectRoleView(${rn})"
+                       ${isActive ? 'disabled' : ''}>${esc(name)}</button>`;
+    }
+    btnContainer.innerHTML = html;
+  }
+
+  window.selectRoleView = function(roleNum) {
+    send({ type: 'set_active_role', role_num: roleNum });
+  };
+
+  // ── M5: previous-state toggle ─────────────────────────────────────
+
+  function _updatePrevToggle() {
+    const hasPrev = !!prevVisHtml;
+    document.querySelectorAll('.prev-toggle-btn').forEach(function(btn) {
+      btn.disabled    = !hasPrev;
+      btn.textContent = showingPrev ? '\u21A9 Show Current' : '\u21D4 Show Previous';
+    });
+    const vd = document.getElementById('vis-display');
+    if (vd) vd.classList.toggle('showing-prev', showingPrev);
+  }
+
+  window.togglePreviousState = function() {
+    if (!prevVisHtml) return;
+    showingPrev = !showingPrev;
+    const vd = document.getElementById('vis-display');
+    vd.innerHTML = showingPrev ? prevVisHtml : currentVisHtml;
+    setupHitCanvas();      // re-parse Tier-2 canvas regions if present
+    _updatePrevToggle();
+  };
+
+  // ── Full-screen enter / exit ──────────────────────────────────────
+
+  window.enterFullscreen = function() {
+    if (fsActive) return;
+    const visEl = document.getElementById('vis-display');
+    if (!visEl || visEl.style.display === 'none') return;
+
+    fsVisParent      = visEl.parentNode;
+    fsVisNextSibling = visEl.nextSibling;
+    fsActive         = true;
+
+    const overlay = document.getElementById('fs-overlay');
+    // Insert vis-display just before the tray (after #fs-close)
+    const tray = document.getElementById('fs-op-tray');
+    overlay.insertBefore(visEl, tray);
+    overlay.style.display = 'flex';
+
+    renderFsOps(currentOps, fsLastIsMyTurn);
+    _updatePrevToggle();   // M5: sync tray button with current toggle state
+    document.addEventListener('keydown', _onFsKey);
+  };
+
+  window.exitFullscreen = function() {
+    if (!fsActive) return;
+    fsActive = false;
+
+    const visEl   = document.getElementById('vis-display');
+    const overlay = document.getElementById('fs-overlay');
+
+    // Restore vis-display to its exact original DOM position.
+    if (fsVisNextSibling) {
+      fsVisParent.insertBefore(visEl, fsVisNextSibling);
+    } else {
+      fsVisParent.appendChild(visEl);
+    }
+
+    overlay.style.display = 'none';
+    document.getElementById('fs-op-tray').classList.remove('visible');
+    document.removeEventListener('keydown', _onFsKey);
+  };
+
+  function _onFsKey(e) {
+    if (e.key === 'Escape') {
+      if (document.getElementById('vis-ctx-menu').style.display !== 'none') {
+        closeCtxMenu(); return;
+      }
+      exitFullscreen();
+    }
+  }
+
+  // Reveal tray when pointer enters the bottom 12% of the overlay.
+  (function() {
+    const overlay = document.getElementById('fs-overlay');
+    overlay.addEventListener('pointermove', function(e) {
+      if (!fsActive) return;
+      const tray   = document.getElementById('fs-op-tray');
+      const thresh = overlay.clientHeight * 0.88;
+      if (e.clientY >= thresh) tray.classList.add('visible');
+      else                     tray.classList.remove('visible');
+    });
+  })();
+
+  function onGoalReached(msg) {
+    gameOver = true;
+    showGoal(msg.goal_message || 'Goal reached!');
+    const gameWrap = document.querySelector('[data-gsl-phase]');
+    if (gameWrap) gameWrap.dataset.gslPhase = 'ended';
+    renderOps([], false);
+    document.getElementById('undo-btn').disabled = true;
+    document.querySelectorAll('.prev-toggle-btn').forEach(function(b) { b.disabled = true; });
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) pauseBtn.disabled = true;
+    const rematchBtn = document.getElementById('rematch-btn');
+    if (rematchBtn) rematchBtn.style.display = 'inline-block';
+  }
+
+  function onNewSessionReady(msg) {
+    setStatus('New session ready — redirecting to lobby…');
+    // Pre-store the new token so the lobby skips the "Who are you playing as?" overlay.
+    if (msg.your_new_token && msg.new_session_key) {
+      sessionStorage.setItem('wsz6_join_' + msg.new_session_key, msg.your_new_token);
+    }
+    window.location.href = msg.lobby_url;
+  }
+
+  function onGamePaused(msg) {
+    gameOver = true;
+    renderOps([], false);
+    document.getElementById('undo-btn').disabled = true;
+    document.querySelectorAll('.prev-toggle-btn').forEach(function(b) { b.disabled = true; });
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) pauseBtn.disabled = true;
+    document.getElementById('turn-banner').innerHTML = '';
+    const lobbyUrl = '/play/join/' + SESSION_KEY + '/';
+    const banner = document.getElementById('paused-banner');
+    banner.innerHTML = '⏸ Game paused at step ' + msg.step +
+      '. <a href="' + lobbyUrl + '">Go to lobby to resume.</a>';
+    banner.style.display = 'block';
+    setStatus('Game paused (checkpoint saved).');
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────
+
+  function renderOps(ops, isMyTurn) {
+    const list = document.getElementById('ops-list');
+    if (!ops || ops.length === 0) {
+      list.innerHTML =
+        '<li style="color:#aaa; font-style:italic; font-size:.9rem;">No operators available</li>';
+      return;
+    }
+    let html = '';
+    for (const op of ops) {
+      const canApply = isMyTurn && op.applicable;
+      const hasParams = op.params && op.params.length > 0;
+      const isFileEdit = hasParams && op.params.some(p => p.type === 'file_edit');
+      // ✎ for file-edit ops, ▸ for other parameterized ops
+      const hint = isFileEdit
+        ? ' <span style="font-size:.75rem;opacity:.65;" title="Opens text editor">✎</span>'
+        : hasParams
+          ? ' <span style="font-size:.7rem;opacity:.6;" title="Requires input">▸</span>'
+          : '';
+      html += `<li>
+        <button class="${canApply ? 'applicable' : ''}"
+                data-op-name="${op.name.replace(/"/g,'&quot;')}"
+                onclick="applyOp(${op.index})"
+                ${canApply ? '' : 'disabled'}>
+          ${esc(op.name)}${hint}
+        </button>
+      </li>`;
+    }
+    list.innerHTML = html;
+  }
+
+  function renderFsOps(ops, isMyTurn) {
+    const list = document.getElementById('fs-ops-list');
+    if (!list) return;
+    if (!ops || ops.length === 0) {
+      list.innerHTML =
+        '<li style="color:#aaa; font-style:italic; font-size:.85rem;">No operators</li>';
+      return;
+    }
+    let html = '';
+    for (const op of ops) {
+      const canApply = isMyTurn && op.applicable;
+      html += `<li><button class="${canApply ? 'applicable' : ''}"
+                   data-op-name="${op.name.replace(/"/g,'&quot;')}"
+                   onclick="applyOp(${op.index})"
+                   ${canApply ? '' : 'disabled'}>${esc(op.name)}</button></li>`;
+    }
+    list.innerHTML = html;
+  }
+
+  function showGoal(msg) {
+    const el = document.getElementById('goal-banner');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function showHelp(msg) {
+    const el = document.getElementById('help-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  // ── User action: apply operator ───────────────────────────────────
+
+  window.applyOp = function(opIndex, clientArgs) {
+    const op = currentOps.find(o => o.index === opIndex);
+    // If clientArgs supplied (from vis click), send directly.
+    if (clientArgs !== undefined) {
+      send({ type: 'apply_operator', op_index: opIndex, args: clientArgs });
+      return;
+    }
+    if (!op || !op.params || op.params.length === 0) {
+      send({ type: 'apply_operator', op_index: opIndex });
+      return;
+    }
+    pendingOpIndex = opIndex;
+    // Route to file-edit modal or inline param form.
+    if (op.params.some(p => p.type === 'file_edit')) {
+      openFileEditModal(op);
+    } else {
+      showParamForm(op.name, op.params);
+    }
+  };
+
+  // ── File-edit modal ───────────────────────────────────────────────
+
+  function openFileEditModal(op) {
+    const feParam = op.params.find(p => p.type === 'file_edit');
+    const initial = (feParam && feParam.initial_text) || '';
+
+    document.getElementById('file-edit-title').textContent = op.name;
+    feArea.value = initial;
+    _updateWordCount();
+
+    const overlay = document.getElementById('file-edit-overlay');
+    overlay.style.display = 'flex';
+    feArea.focus();
+    feArea.setSelectionRange(0, 0);
+    feArea.scrollTop = 0;
+  }
+
+  function closeFileEditModal() {
+    document.getElementById('file-edit-overlay').style.display = 'none';
+    feArea.value = '';
+    _updateWordCount();
+  }
+
+  window.saveFileEdit = function() {
+    const content = feArea.value;
+    const idx     = pendingOpIndex;
+    closeFileEditModal();
+    pendingOpIndex = null;
+    send({ type: 'apply_operator', op_index: idx, args: [content] });
+  };
+
+  window.cancelFileEdit = function() {
+    closeFileEditModal();
+    pendingOpIndex = null;
+  };
+
+  // ── Inline param form (int / float / str) ─────────────────────────
+
+  function showParamForm(opName, params) {
+    document.getElementById('param-op-name').textContent = opName;
+    const fields = document.getElementById('param-fields');
+    let html = '';
+    for (let i = 0; i < params.length; i++) {
+      const p     = params[i];
+      const label = p.name || ('Parameter ' + (i + 1));
+      html += '<div style="margin-bottom:.6rem;">';
+      html += '<label>' + esc(label) + '</label>';
+      if (p.type === 'int') {
+        const minA = (p.min !== undefined) ? ' min="' + p.min + '"' : '';
+        const maxA = (p.max !== undefined) ? ' max="' + p.max + '"' : '';
+        html += '<input id="param-' + i + '" type="number" step="1"' + minA + maxA + '>';
+        if (p.min !== undefined && p.max !== undefined) {
+          html += '<span class="param-hint">Range: ' + p.min + ' – ' + p.max + '</span>';
+        }
+      } else if (p.type === 'float') {
+        const minA = (p.min !== undefined) ? ' min="' + p.min + '"' : '';
+        const maxA = (p.max !== undefined) ? ' max="' + p.max + '"' : '';
+        html += '<input id="param-' + i + '" type="number" step="any"' + minA + maxA + '>';
+        if (p.min !== undefined && p.max !== undefined) {
+          html += '<span class="param-hint">Range: ' + p.min + ' – ' + p.max + '</span>';
+        }
+      } else {
+        html += '<input id="param-' + i + '" type="text">';
+      }
+      html += '</div>';
+    }
+    fields.innerHTML = html;
+    document.getElementById('param-form').style.display = 'block';
+    const first = document.getElementById('param-0');
+    if (first) { first.focus(); if (first.select) first.select(); }
+  }
+
+  function hideParamForm() {
+    document.getElementById('param-form').style.display = 'none';
+    document.getElementById('param-fields').innerHTML = '';
+  }
+
+  window.submitParams = function() {
+    if (pendingOpIndex === null) return;
+    const op = currentOps.find(o => o.index === pendingOpIndex);
+    if (!op) return;
+    const params = op.params || [];
+    const args = [];
+    for (let i = 0; i < params.length; i++) {
+      const p  = params[i];
+      const el = document.getElementById('param-' + i);
+      if (!el) { args.push(null); continue; }
+      el.style.borderColor = '';
+      if (p.type === 'int') {
+        const v = parseInt(el.value, 10);
+        if (isNaN(v))                         { _paramErr(el); return; }
+        if (p.min !== undefined && v < p.min) { _paramErr(el); return; }
+        if (p.max !== undefined && v > p.max) { _paramErr(el); return; }
+        args.push(v);
+      } else if (p.type === 'float') {
+        const v = parseFloat(el.value);
+        if (isNaN(v))                         { _paramErr(el); return; }
+        if (p.min !== undefined && v < p.min) { _paramErr(el); return; }
+        if (p.max !== undefined && v > p.max) { _paramErr(el); return; }
+        args.push(v);
+      } else {
+        args.push(el.value);
+      }
+    }
+    const idx = pendingOpIndex;
+    hideParamForm();
+    pendingOpIndex = null;
+    send({ type: 'apply_operator', op_index: idx, args: args });
+  };
+
+  function _paramErr(el) { el.style.borderColor = '#dc3545'; el.focus(); }
+
+  window.cancelParams = function() {
+    hideParamForm();
+    pendingOpIndex = null;
+  };
+
+  // ── Other controls ────────────────────────────────────────────────
+
+  window.sendUndo = function() { send({ type: 'request_undo' }); };
+
+  window.sendHelp = function() { send({ type: 'request_help' }); };
+
+  window.sendPause = function() {
+    if (confirm('Pause the game? All players will be disconnected from the game page.')) {
+      send({ type: 'request_pause' });
+      document.getElementById('pause-btn').disabled = true;
+    }
+  };
+
+  window.sendRematch = function() {
+    send({ type: 'request_rematch' });
+    const rematchBtn = document.getElementById('rematch-btn');
+    if (rematchBtn) rematchBtn.disabled = true;
+  };
+
+  function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+
+  function esc(str) {
+    const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML;
+  }
+
+  // ── Tier 2: canvas coordinate hit-testing ────────────────────────
+
+  function setupHitCanvas() {
+    // Tear down any previous canvas.
+    if (_regionCanvas) { _regionCanvas.remove(); _regionCanvas = null; }
+    _regionDefs    = null;
+    _hoveredRegion = null;
+
+    const script = document.getElementById('wsz6-regions');
+    if (!script) return;
+
+    let manifest;
+    try { manifest = JSON.parse(script.textContent); } catch(e) { return; }
+
+    const container = document.getElementById(manifest.container_id);
+    if (!container) return;
+
+    _regionDefs = manifest.regions;
+    const nw = manifest.scene_width;
+    const nh = manifest.scene_height;
+
+    // Create canvas overlay.
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;' +
+                            'pointer-events:all;cursor:default;';
+    canvas.width  = nw;
+    canvas.height = nh;
+
+    // Container must be position:relative to anchor the canvas.
+    container.style.position = 'relative';
+    container.appendChild(canvas);
+    _regionCanvas = canvas;
+
+    // Scale helper: viewport coords → natural canvas coords.
+    function scalePoint(cx, cy) {
+      const r  = canvas.getBoundingClientRect();
+      const sx = nw / r.width;
+      const sy = nh / r.height;
+      return [(cx - r.left) * sx, (cy - r.top) * sy];
+    }
+
+    function findRegion(px, py) {
+      for (const reg of _regionDefs) {
+        if (_hitTest(reg, px, py)) return reg;
+      }
+      return null;
+    }
+
+    function redrawCanvas(hovered) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, nw, nh);
+      if (!hovered) return;
+      ctx.save();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth   = 3;
+      ctx.fillStyle   = 'rgba(255,215,0,0.18)';
+      ctx.beginPath();
+      _drawRegion(ctx, hovered);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    canvas.addEventListener('mousemove', function(e) {
+      const [px, py] = scalePoint(e.clientX, e.clientY);
+      const reg = findRegion(px, py);
+      if (reg !== _hoveredRegion) {
+        _hoveredRegion = reg;
+        redrawCanvas(reg);
+        canvas.style.cursor = reg ? 'pointer' : 'default';
+        const lbl = document.getElementById('vis-region-label');
+        if (reg && reg.hover_label) {
+          lbl.textContent   = reg.hover_label;
+          lbl.style.left    = (e.clientX + 12) + 'px';
+          lbl.style.top     = (e.clientY - 24) + 'px';
+          lbl.style.display = 'block';
+        } else {
+          lbl.style.display = 'none';
+        }
+      }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+      _hoveredRegion = null;
+      redrawCanvas(null);
+      document.getElementById('vis-region-label').style.display = 'none';
+    });
+
+    canvas.addEventListener('click', function(e) {
+      closeInfoPopup(); closeCtxMenu();
+      const [px, py] = scalePoint(e.clientX, e.clientY);
+      const reg = findRegion(px, py);
+      if (!reg) return;
+      if (reg.op_index !== undefined) {
+        let args;
+        if (reg.send_click_coords) {
+          args = [Math.round(px), Math.round(py)];
+        } else {
+          args = reg.op_args || undefined;
+        }
+        applyOp(reg.op_index, args);
+      } else if (reg.info) {
+        showInfoPopup(e.clientX, e.clientY, reg.info);
+      }
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
+      const [px, py] = scalePoint(e.clientX, e.clientY);
+      const reg = findRegion(px, py);
+      if (!reg || !reg.context) return;
+      e.preventDefault();
+      closeInfoPopup();
+      showCtxMenu(e.clientX, e.clientY, reg.context);
+    });
+  }
+
+  // Point-in-region hit test for rect / circle / polygon.
+  function _hitTest(reg, px, py) {
+    if (reg.shape === 'rect') {
+      return px >= reg.x && px <= reg.x + reg.w && py >= reg.y && py <= reg.y + reg.h;
+    }
+    if (reg.shape === 'circle') {
+      const dx = px - reg.cx, dy = py - reg.cy;
+      return dx*dx + dy*dy <= reg.r * reg.r;
+    }
+    if (reg.shape === 'polygon') {
+      // Ray-casting algorithm.
+      const pts = reg.points;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i][0], yi = pts[i][1];
+        const xj = pts[j][0], yj = pts[j][1];
+        if (((yi > py) !== (yj > py)) &&
+            (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+    return false;
+  }
+
+  // Draw a region shape onto a canvas 2d context (for hover highlight).
+  function _drawRegion(ctx, reg) {
+    if (reg.shape === 'rect') {
+      ctx.rect(reg.x, reg.y, reg.w, reg.h);
+    } else if (reg.shape === 'circle') {
+      ctx.arc(reg.cx, reg.cy, reg.r, 0, 2*Math.PI);
+    } else if (reg.shape === 'polygon') {
+      const pts = reg.points;
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+    }
+  }
+
+  // ── Shared action handlers: info popup, context menu ─────────────
+
+  function showInfoPopup(x, y, text) {
+    const p = document.getElementById('vis-info-popup');
+    p.textContent = text;
+    p.style.left  = Math.min(x + 14, window.innerWidth - 300) + 'px';
+    p.style.top   = (y + 14) + 'px';
+    p.style.display = 'block';
+  }
+  function closeInfoPopup() {
+    document.getElementById('vis-info-popup').style.display = 'none';
+  }
+
+  function showCtxMenu(x, y, items) {
+    const menu = document.getElementById('vis-ctx-menu');
+    const list = document.getElementById('vis-ctx-list');
+    list.innerHTML = '';
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.textContent = item.label;
+      if (item.info && item.op_index === undefined) li.classList.add('ctx-info');
+      li.addEventListener('click', function() {
+        closeCtxMenu();
+        if (item.op_index !== undefined) applyOp(item.op_index, item.op_args);
+        else if (item.info) showInfoPopup(x, y, item.info);
+      });
+      list.appendChild(li);
+    }
+    menu.style.left    = Math.min(x, window.innerWidth  - 180) + 'px';
+    menu.style.top     = Math.min(y, window.innerHeight - 200) + 'px';
+    menu.style.display = 'block';
+  }
+  function closeCtxMenu() {
+    document.getElementById('vis-ctx-menu').style.display = 'none';
+  }
+
+  // Close popups on click-outside or Esc.
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#vis-ctx-menu'))  closeCtxMenu();
+    if (!e.target.closest('#vis-info-popup,#vis-display')) closeInfoPopup();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeInfoPopup(); closeCtxMenu(); }
+  });
+
+  connect();
+})();
+</script>
+{% endblock %}

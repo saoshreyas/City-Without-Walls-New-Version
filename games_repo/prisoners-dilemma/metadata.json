@@ -1,0 +1,11 @@
+{
+  "slug": "prisoners-dilemma",
+  "name": "Prisoner's Dilemma",
+  "version": "1.0",
+  "min_players": 2,
+  "max_players": 2,
+  "pff_file": "Prisoners_Dilemma_SZ6.py",
+  "vis_file": "Prisoners_Dilemma_WSZ6_VIS.py",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:08.287029Z"
+}

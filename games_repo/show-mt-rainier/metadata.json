@@ -1,0 +1,11 @@
+{
+  "slug": "show-mt-rainier",
+  "name": "Mt. Rainier Views",
+  "version": "1.0",
+  "min_players": 1,
+  "max_players": 1,
+  "pff_file": "Show_Mt_Rainier_SZ6.py",
+  "vis_file": "Show_Mt_Rainier_WSZ6_VIS.py",
+  "images_dir": "Show_Mt_Rainier_images",
+  "installed_at": "2026-05-05T19:27:07.487725Z"
+}

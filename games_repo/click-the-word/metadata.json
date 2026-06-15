@@ -1,0 +1,11 @@
+{
+  "slug": "click-the-word",
+  "name": "Cliquez sur l'image",
+  "version": "1.0",
+  "min_players": 1,
+  "max_players": 1,
+  "pff_file": "Click_Word_SZ6.py",
+  "vis_file": "Click_Word_WSZ6_VIS.py",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:07.720081Z"
+}

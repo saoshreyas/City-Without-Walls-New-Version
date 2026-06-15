@@ -1,0 +1,65 @@
+# Setup_OCCLUEdo_Live.gsl
+#
+# Reaches a started 4-role OCCLUEdo game with two players, then hands off
+# to the developer for interactive play.  Designed for use with --stay-open.
+#
+# Usage:
+#   python manage.py run_gsl ../Setup_OCCLUEdo_Live.gsl \
+#       --mode browser --headed --stay-open
+#
+# Requirements:
+#   ADMIN_PASS env var  — password for the 'admin' account (Alice)
+#
+# Bob is created as a mock account.  His browser tab will remain logged in
+# until you press Enter at the terminal (mock accounts are kept alive until
+# the management command exits).
+#
+# To use a persistent second account instead of mock, replace the Add_Player
+# line with:
+#   Add_Player bob $BOB_PASS display:"Bob"
+# -----------------------------------------------------------------------
+
+
+# --- 1. Session owner (Alice = admin) ----------------------------------
+
+Login admin $ADMIN_PASS display:"Alice"
+
+
+# --- 2. Game selection -------------------------------------------------
+
+Select_Game occluedo
+
+
+# --- 3. Create a session -----------------------------------------------
+
+Create_Session name:"Live dev session"
+
+
+# --- 4. Second player --------------------------------------------------
+#   Mock account — stays alive until Enter is pressed at the terminal.
+
+Add_Player mock display:"Bob"
+
+
+# --- 5. Role assignments -----------------------------------------------
+
+Assign_role Alice  "Miss Scarlet"
+Assign_role Alice  "Mr. Green"
+Assign_role Bob    "Colonel Mustard"
+Assign_role Bob    "Prof. Plum"
+
+
+# --- 6. Start the game -------------------------------------------------
+
+Start_game
+
+
+# --- 7. Quick sanity check before handoff ------------------------------
+#   Remove these lines if you want a completely assertion-free setup script.
+
+Assert_phase         playing
+Assert_active_role   "Miss Scarlet"
+
+
+# Script ends here.  With --stay-open the terminal will prompt you to
+# press Enter when you are finished interacting with the game.

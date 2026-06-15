@@ -1,0 +1,11 @@
+{
+  "slug": "tic-tac-toe",
+  "name": "Tic-Tac-Toe",
+  "version": "1.0",
+  "min_players": 2,
+  "max_players": 27,
+  "pff_file": "Tic_Tac_Toe_SZ6.py",
+  "vis_file": "Tic_Tac_Toe_WSZ6_VIS.py",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:06.440199Z"
+}

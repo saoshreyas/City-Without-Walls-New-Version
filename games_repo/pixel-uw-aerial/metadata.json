@@ -1,0 +1,11 @@
+{
+  "slug": "pixel-uw-aerial",
+  "name": "Pixel Values with Old UW Aerial Image",
+  "version": "1.0",
+  "min_players": 1,
+  "max_players": 1,
+  "pff_file": "Pixel_Probe_SZ6.py",
+  "vis_file": "Pixel_Probe_WSZ6_VIS.py",
+  "images_dir": "UW_Aerial_images",
+  "installed_at": "2026-05-05T19:27:08.089026Z"
+}

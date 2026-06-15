@@ -1,0 +1,59 @@
+# Setup_PrisonersDilemma_Live.gsl
+#
+# Sets up a live 2-player Prisoner's Dilemma session in the browser.
+#
+# Alice (the admin account) plays as Prisoner A in the main browser window.
+# Bob   (mock account)      plays as Prisoner B — a second browser tab is
+#                           opened automatically in browser mode.
+#
+# Usage:
+#   python manage.py run_gsl Setup_PrisonersDilemma_Live.gsl \
+#       --mode browser --headed --stay-open
+#
+# The --stay-open flag keeps the session alive after setup so that
+# human players can take over and play interactively.
+#
+# To hand off Bob's tab to a second human player:
+#   1. Copy the session URL from Bob's browser tab.
+#   2. Open it in any browser and log in with the second player's account.
+#   3. Assign the "Prisoner B" role from the lobby.
+#
+# SECURITY NOTE: plaintext password below.
+# Replace with: Login admin $ADMIN_PASS display:"Alice"
+# -----------------------------------------------------------------------
+
+# --- Session owner login ----------------------------------------------
+
+Login admin pass1234 display:"Alice"
+
+
+# --- Game selection ---------------------------------------------------
+
+Select_Game prisoners-dilemma
+
+
+# --- Create the session -----------------------------------------------
+
+Create_Session name:"Live Prisoner's Dilemma"
+
+
+# --- Second player (mock, in a second browser tab) --------------------
+
+Add_Player mock display:"Bob"
+
+
+# --- Role assignments -------------------------------------------------
+
+Assign_role Alice "Prisoner A"
+Assign_role Bob   "Prisoner B"
+
+
+# --- Start the game ---------------------------------------------------
+
+Start_game
+
+# The session is now in the 'intro' phase.  Both players can read the
+# rules before Prisoner A clicks "Start the Game" to begin Round 1.
+#
+# With --stay-open the portal will hold this session open until you
+# close the browser or press Ctrl-C in the terminal.

@@ -1,0 +1,102 @@
+# Test_OCCLUEdo.gsl
+#
+# Smoke test: 4-role OCCLUEdo session using two human-controlled players.
+#
+#   Alice (admin account)  →  Miss Scarlet, Mr. Green
+#   Bob   (mock account)   →  Colonel Mustard, Prof. Plum
+#
+# Usage:
+#   python manage.py run_gsl Test_OCCLUEdo.gsl
+#   (api mode by default — no browser required)
+#
+#   For full browser/WebSocket validation:
+#   python manage.py run_gsl Test_OCCLUEdo.gsl --mode browser
+#
+# SECURITY NOTE: pass1234 is a plaintext password. GSL will log a WARNING.
+# Replace with:  Login admin $ADMIN_PASS display:"Alice"
+# -----------------------------------------------------------------------
+
+
+# --- 1. Session owner login -------------------------------------------
+
+Login admin pass1234 display:"Alice"
+
+
+# --- 2. Game selection ------------------------------------------------
+#   In api mode:    looks up the game record by slug.
+#   In browser mode: navigates to the games list and selects OCCLUEdo.
+
+Select_Game occluedo
+
+
+# --- 3. Create a new session ------------------------------------------
+
+Create_Session name:"4-role smoke test: Alice + Bob"
+
+
+# --- 4. Second player -------------------------------------------------
+#   In api mode:    registers a second player context in the session.
+#   In browser mode: opens a new browser tab, navigates to the session
+#                    URL, and logs in the mock user.
+
+Add_Player mock display:"Bob"
+
+
+# --- 5. Role assignments ----------------------------------------------
+#   Alice takes two playing roles; Bob takes the other two.
+#   Roles not assigned here (Mrs. Peacock, Mrs. White, Observer)
+#   will not be active in this game.
+
+Assign_role Alice  "Miss Scarlet"
+Assign_role Alice  "Mr. Green"
+Assign_role Bob    "Colonel Mustard"
+Assign_role Bob    "Prof. Plum"
+
+
+# --- 6. Start the game -----------------------------------------------
+#   This calls initialize_problem(), which triggers deal() and sets up
+#   the initial OCCLUEdo_State with active_roles = [0, 1, 2, 3].
+
+Start_game
+
+
+# --- 7. Assertions: session and player setup --------------------------
+
+Assert_phase         playing       # game engine left lobby phase
+Assert_player_count  2             # exactly two human players connected
+Assert_role_count    4             # four roles were assigned before Start_game
+
+
+# --- 8. Assertions: all four roles are active (identity check) --------
+#   active_roles should be [0, 1, 2, 3] after the lobby closes.
+#   Role indices: Miss Scarlet=0, Mr. Green=1, Colonel Mustard=2, Prof. Plum=3
+#   active_roles.length is a shorthand verified by Assert_role_count above.
+
+Assert_state  active_roles.0  0
+Assert_state  active_roles.1  1
+Assert_state  active_roles.2  2
+Assert_state  active_roles.3  3
+
+
+# --- 9. Assertions: correct initial turn order ------------------------
+#   Miss Scarlet (index 0) always goes first per the roles spec.
+
+Assert_active_role  "Miss Scarlet"
+Assert_state        whose_turn  0
+
+
+# --- 10. Assertions: clean initial game state -------------------------
+#   None of the complex sub-phases should be active at game start.
+
+Assert_state  winner            none
+Assert_state  suggestion_phase  0
+Assert_state  accusation_phase  0
+
+# --- 11. Assertions: views exist for each player/role pair ------------
+#   In api mode: structural check (role in active_roles, user has role).
+#   In browser mode: checks for a rendered, non-error view element.
+
+Assert_view_exists Alice  "Miss Scarlet"
+Assert_view_exists Alice  "Mr. Green"
+Assert_view_exists Bob    "Colonel Mustard"
+Assert_view_exists Bob    "Prof. Plum"

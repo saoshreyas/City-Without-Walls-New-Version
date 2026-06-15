@@ -1,0 +1,11 @@
+{
+  "slug": "missionaries",
+  "name": "Missionaries and Cannibals",
+  "version": "1.0",
+  "min_players": 1,
+  "max_players": 1,
+  "pff_file": "Missionaries_SZ6.py",
+  "vis_file": "",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:06.556801Z"
+}

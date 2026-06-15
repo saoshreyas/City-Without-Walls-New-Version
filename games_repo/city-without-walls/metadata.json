@@ -1,0 +1,11 @@
+{
+  "slug": "city-without-walls",
+  "name": "City Without Walls",
+  "version": "1.0",
+  "min_players": 5,
+  "max_players": 26,
+  "pff_file": "CityWithoutWalls_SZ6.py",
+  "vis_file": "CityWithoutWalls_WSZ6_VIS.py",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:08.451465Z"
+}

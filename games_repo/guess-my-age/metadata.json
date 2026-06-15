@@ -1,0 +1,11 @@
+{
+  "slug": "guess-my-age",
+  "name": "Guess My Age",
+  "version": "1.0",
+  "min_players": 1,
+  "max_players": 1,
+  "pff_file": "Guess_My_Age_SZ6.py",
+  "vis_file": "",
+  "images_dir": "",
+  "installed_at": "2026-05-05T19:27:06.692945Z"
+}

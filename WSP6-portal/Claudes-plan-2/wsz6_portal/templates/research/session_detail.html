@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Session {{ session.session_key }} – Research{% endblock %}
+
+{% block extra_head %}
+<style>
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+  .meta-item { }
+  .meta-label { font-size: .78rem; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .meta-value { font-size: .95rem; margin-top: .15rem; }
+  .api-handle-bar { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
+  .api-handle-bar input { font-family: monospace; font-size: .82rem; color: #555; background: #f5f5f5;
+                           border: 1px solid #ddd; border-radius: 4px; padding: .3rem .6rem; flex: 1; }
+  .outcome-completed  { color: #155724; font-weight: 600; }
+  .outcome-interrupted{ color: #721c24; }
+  .outcome-cancelled  { color: #856404; }
+  /* Annotation styles */
+  .annotation-note { display:flex; gap:.5rem; align-items:flex-start; font-size:.85rem;
+                     padding:.35rem .6rem; background:#fffde7; border-left:3px solid #f9a825;
+                     border-radius:0 3px 3px 0; margin-top:.35rem; }
+  .annotation-text { flex:1; }
+  .annotation-meta { color:#aaa; font-size:.75rem; white-space:nowrap; }
+  .annotation-add summary { cursor:pointer; font-size:.82rem; color:#856404; margin-top:.5rem; }
+  .annotation-add textarea { width:100%; padding:.35rem; margin-top:.35rem;
+                              border:1px solid #ddd; border-radius:3px;
+                              font-size:.85rem; resize:vertical; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p style="margin-bottom:.5rem;">
+  <a href="{% url 'research:dashboard' %}">&#8592; Research Dashboard</a>
+  &nbsp;|&nbsp;
+  <a href="{% url 'research:annotation_list' %}">My Annotations</a>
+  &nbsp;|&nbsp;
+  <a href="{% url 'research:api_token' %}">&#128273; API Token</a>
+</p>
+
+<h1>Session Detail</h1>
+
+<!-- Session metadata card -->
+<div class="card">
+  <h2>{{ session.game.name }}</h2>
+  <div class="meta-grid">
+    <div class="meta-item">
+      <div class="meta-label">Session Key</div>
+      <div class="meta-value" style="font-family:monospace; font-size:.82rem;">{{ session.session_key }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Owner</div>
+      <div class="meta-value">{{ session.owner.username }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Status</div>
+      <div class="meta-value"><span class="badge badge-{{ session.status }}">{{ session.get_status_display }}</span></div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Started</div>
+      <div class="meta-value">{{ session.started_at|date:"Y-m-d H:i:s" }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Ended</div>
+      <div class="meta-value">{{ session.ended_at|date:"Y-m-d H:i:s"|default:"—" }}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Play-throughs</div>
+      <div class="meta-value">{{ playthroughs|length }}</div>
+    </div>
+  </div>
+
+  {% if session.summary_json %}
+  <details style="margin-top:.5rem;">
+    <summary style="cursor:pointer; font-size:.85rem; color:#1a3a5c;">Session summary JSON</summary>
+    <pre style="font-size:.78rem; background:#f5f5f5; padding:.8rem; border-radius:4px; margin-top:.4rem;
+                overflow:auto; max-height:200px;">{{ session.summary_json }}</pre>
+  </details>
+  {% endif %}
+
+  <!-- API handle -->
+  <div style="margin-top:1rem; border-top:1px solid #eee; padding-top:.8rem;">
+    <div class="meta-label">API Handle</div>
+    <div class="api-handle-bar">
+      <input type="text" readonly id="api-handle-input"
+             value="{{ request.scheme }}://{{ request.get_host }}/api/v1/sessions/{{ session.session_key }}/">
+      <button class="btn btn-sm" onclick="copyHandle()">Copy</button>
+      <span id="copy-confirm" style="font-size:.8rem; color:#28a745; display:none;">Copied!</span>
+    </div>
+  </div>
+
+  <!-- Session-level annotations -->
+  <div style="margin-top:1rem; border-top:1px solid #eee; padding-top:.8rem;">
+    <div class="meta-label">Session Notes
+      <a href="{% url 'research:annotation_list' %}"
+         style="font-size:.75rem; font-weight:400; margin-left:.5rem; color:#1a3a5c;">
+        All my annotations &#8599;
+      </a>
+    </div>
+    {% for ann in session_annotations %}
+    <div class="annotation-note">
+      <span class="annotation-text">{{ ann.annotation }}</span>
+      <span class="annotation-meta">{{ ann.created_at|date:"Y-m-d H:i" }}</span>
+      <form method="post" action="{% url 'research:delete_annotation' ann.pk %}"
+            style="display:inline; flex-shrink:0;">
+        {% csrf_token %}
+        <input type="hidden" name="next"
+               value="{% url 'research:session_detail' session.session_key %}">
+        <button type="submit" class="btn btn-sm"
+                style="color:#721c24; padding:.1rem .35rem;"
+                title="Delete note">&#10005;</button>
+      </form>
+    </div>
+    {% empty %}
+    <span style="color:#aaa; font-size:.82rem;">No session notes yet.</span>
+    {% endfor %}
+
+    <details class="annotation-add">
+      <summary>+ Add session note</summary>
+      <form method="post" action="{% url 'research:add_annotation' %}">
+        {% csrf_token %}
+        <input type="hidden" name="session_key" value="{{ session.session_key }}">
+        <input type="hidden" name="next"
+               value="{% url 'research:session_detail' session.session_key %}">
+        <textarea name="annotation" rows="3"></textarea>
+        <button type="submit" class="btn btn-sm" style="margin-top:.3rem;">Save Note</button>
+      </form>
+    </details>
+  </div>
+</div>
+
+<!-- Play-throughs table -->
+<div class="card">
+  <div style="display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; margin-bottom:.6rem;">
+    <h2 style="margin:0;">Play-throughs</h2>
+    <span style="flex:1;"></span>
+    <label style="display:flex; align-items:center; gap:.35rem; font-size:.82rem;
+                  cursor:pointer; font-weight:400; color:#555;"
+           title="If checked, a JSON file of your personal annotations is included in downloaded files">
+      <input type="checkbox" id="incl-ann" checked>
+      Include annotations
+    </label>
+  </div>
+  {% if playthroughs %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Started</th>
+        <th>Ended</th>
+        <th>Outcome</th>
+        <th>Steps</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pt in playthroughs %}
+      <tr>
+        <td>{{ pt.display_num }}</td>
+        <td>{{ pt.started_at|date:"H:i:s" }}</td>
+        <td>{{ pt.ended_at|date:"H:i:s"|default:"—" }}</td>
+        <td>
+          {% if pt.outcome == 'completed' %}
+            <span class="outcome-completed">&#10003; Completed</span>
+          {% elif pt.outcome == 'interrupted' %}
+            <span class="outcome-interrupted">&#10007; Interrupted</span>
+          {% elif pt.outcome == 'cancelled' %}
+            <span class="outcome-cancelled">&#8211; Cancelled</span>
+          {% else %}
+            <span style="color:#888;">{{ pt.outcome|default:"in progress" }}</span>
+          {% endif %}
+        </td>
+        <td>{{ pt.step_count }}</td>
+        <td>
+          <a href="{% url 'research:log_viewer' session.session_key pt.playthrough_id %}"
+             class="btn btn-sm btn-primary">View Log</a>
+          <a href="{% url 'research:export_jsonl' session.session_key pt.playthrough_id %}?include_annotations=1"
+             data-export-ann class="btn btn-sm">JSONL</a>
+          <a href="{% url 'research:export_zip' session.session_key pt.playthrough_id %}?include_annotations=1"
+             data-export-ann class="btn btn-sm">ZIP</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:#888;">No play-throughs recorded for this session.</p>
+  {% endif %}
+
+  {% if playthroughs %}
+  <div style="margin-top:.8rem; padding-top:.8rem; border-top:1px solid #eee;">
+    <a href="{% url 'research:export_session_zip' session.session_key %}?include_annotations=1"
+       data-export-ann class="btn btn-sm">&#8595; Export Entire Session (ZIP)</a>
+    <span style="font-size:.78rem; color:#888; margin-left:.5rem;">
+      Includes all play-throughs: logs, artifacts, checkpoints, and annotations.
+    </span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function copyHandle() {
+  const input = document.getElementById('api-handle-input');
+  navigator.clipboard.writeText(input.value).then(function() {
+    const c = document.getElementById('copy-confirm');
+    c.style.display = 'inline';
+    setTimeout(function() { c.style.display = 'none'; }, 2000);
+  });
+}
+
+// "Include annotations" toggle — updates ?include_annotations param on all export links.
+(function() {
+  var cb = document.getElementById('incl-ann');
+  if (!cb) return;
+  function updateExportLinks() {
+    var include = cb.checked;
+    document.querySelectorAll('[data-export-ann]').forEach(function(link) {
+      var url = new URL(link.href, location.href);
+      if (include) {
+        url.searchParams.set('include_annotations', '1');
+      } else {
+        url.searchParams.delete('include_annotations');
+      }
+      link.href = url.href;
+    });
+  }
+  cb.addEventListener('change', updateExportLinks);
+  // Initial state: checkbox is checked and links already carry ?include_annotations=1.
+})();
+</script>
+{% endblock %}

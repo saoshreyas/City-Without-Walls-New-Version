@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% block title %}{% if is_resume %}Resume{% else %}Lobby{% endif %} – {{ game_name }} – WSZ6 Portal{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lobby-wrap    { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start; }
+  .role-row      { padding: .5rem 0; border-bottom: 1px solid #e0e0e0; }
+  .role-header   { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+  .role-name     { font-weight: 600; min-width: 120px; }
+  .role-capacity { font-size: .78rem; color: #888; }
+  .role-players  { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; margin-left: .3rem; }
+  .player-chip   { background: #d4edda; color: #155724; padding: .15rem .5rem; border-radius: 10px; font-size:.85rem; display:inline-flex; align-items:center; gap:.25rem; }
+  .bot-chip      { background: #d1ecf1; color: #0c5460; padding: .15rem .5rem; border-radius: 10px; font-size:.85rem; display:inline-flex; align-items:center; gap:.25rem; }
+  .my-chip       { outline: 2px solid #0d6efd; }
+  .unassign-btn  { background: none; border: none; color: #dc3545; cursor: pointer;
+                   font-size: .9rem; font-weight: 700; padding: 0 .1rem; line-height: 1; }
+  .unassign-btn:hover { color: #a71d2a; }
+  .empty-slot    { color: #aaa; font-style: italic; font-size:.9rem; }
+  .role-actions  { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .3rem; margin-left: .3rem; }
+  .unassigned-list { list-style: none; }
+  .unassigned-list li { padding: .35rem .5rem; background:#f0f4f8; border-radius:4px; margin-bottom:.3rem; cursor:pointer; font-size:.9rem; }
+  .unassigned-list li:hover { background: #e2eaf2; }
+  #status-bar    { padding: .5rem .8rem; background:#e8f4fd; border-radius:4px; font-size:.88rem; margin-bottom:.8rem; color:#0c5460; }
+  .assign-hint   { font-size:.78rem; color:#666; margin-top:.4rem; }
+  .resume-banner { background:#fff3cd; color:#856404; padding:.6rem 1rem; border-radius:4px;
+                   margin-bottom:.8rem; font-weight:600; }
+
+  /* Roles popup (read-only view shown after game starts) */
+  #roles-popup-btn { margin-top: .5rem; }
+  #roles-popup { margin-top: .5rem; }
+  #roles-popup .role-row { border-bottom-color: #e8e8e8; }
+  #roles-popup .role-header { flex-wrap: wrap; }
+
+  @media (max-width:700px) { .lobby-wrap { grid-template-columns: 1fr; } }
+
+  /* Per-tab identity overlay */
+  #name-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  #name-overlay .overlay-card {
+    background: #fff; border-radius: 8px; padding: 1.75rem 2rem;
+    max-width: 380px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  }
+  #name-overlay h2 { margin-top: 0; font-size: 1.2rem; }
+  #name-overlay input { width: 100%; margin-bottom: .75rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>{% if is_resume %}Resume Session{% else %}Lobby{% endif %}: {{ game_name }}</h1>
+{% if is_resume %}
+<div class="resume-banner">⏸ This session is paused. The owner can resume it below.</div>
+{% endif %}
+<p style="color:#666; font-size:.9rem; margin-bottom:.8rem;">
+  Session: <code>{{ session_key }}</code>
+  &nbsp;|&nbsp; Share this URL with other players: <code>{{ request.build_absolute_uri }}</code>
+  <button class="btn btn-sm btn-outline-secondary" style="margin-left:.4rem; font-size:.8rem;"
+          onclick="navigator.clipboard.writeText('{{ request.build_absolute_uri|escapejs }}').then(()=>this.textContent='Copied!').catch(()=>this.textContent='Copy failed')">
+    Copy URL
+  </button>
+</p>
+
+<!-- Per-tab identity overlay — shown when this tab has no stored player token -->
+<div id="name-overlay">
+  <div class="overlay-card">
+    <h2>Who are you playing as?</h2>
+    <p style="color:#666; font-size:.9rem; margin-bottom:.75rem;">
+      Each browser tab is a separate player. Enter your display name for this tab.
+    </p>
+    <input id="overlay-name-input" type="text" placeholder="Your display name">
+    <button class="btn btn-primary" style="width:100%;" onclick="startWithName()">Join</button>
+  </div>
+</div>
+
+<div id="status-bar">Connecting…</div>
+<div id="playing-as-badge"
+     style="display:none; background:#d4edda; color:#155724;
+            padding:.2rem .7rem; border-radius:10px;
+            font-size:.85rem; margin-bottom:.5rem;">
+</div>
+
+<div class="lobby-wrap">
+
+  <!-- Left: role table + controls -->
+  <div class="card">
+    <h2>Roles</h2>
+    <div id="roles-container"><p style="color:#aaa;">Loading…</p></div>
+
+    <!-- Name entry (everyone) -->
+    <div style="margin-top:1rem; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+      <input id="name-input" type="text" placeholder="Your display name" style="max-width:200px;">
+      <button class="btn btn-primary btn-sm" onclick="sendJoin()">Set name</button>
+    </div>
+
+    <!-- Roles popup button (shown after game starts) -->
+    <button id="roles-popup-btn" class="btn btn-sm btn-outline-secondary"
+            style="display:none;" onclick="toggleRolesPopup()">
+      Roles
+    </button>
+    <div id="roles-popup" class="card" style="display:none; margin-top:.5rem;">
+      <h3 style="margin-top:0;">Role Assignments</h3>
+      <div id="roles-popup-content"></div>
+      <button class="btn btn-sm" style="margin-top:.5rem;" onclick="toggleRolesPopup()">Close</button>
+    </div>
+
+    <!-- Start / Resume Game (owner only, shown after connected) -->
+    <div id="start-section" style="display:none; margin-top:1rem;">
+      <button id="start-btn" class="btn btn-success" onclick="sendStartGame()">
+        {% if is_resume %}▶ Resume Session{% else %}▶ Start Game{% endif %}
+      </button>
+      {% if not is_resume %}
+      <p class="assign-hint">Assign all required roles above before starting.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right: connected/unassigned players -->
+  <div class="card">
+    <h2>Connected Players</h2>
+    <p id="assign-hint" class="assign-hint" style="display:none;">
+      Click a player to select, then click <em>Add here</em> next to a role.
+      Click × next to a player in a role to remove them.
+    </p>
+    <ul id="unassigned-list" class="unassigned-list">
+      <li style="color:#aaa; font-style:italic;">Nobody yet</li>
+    </ul>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const SESSION_KEY          = "{{ session_key }}";
+  const WS_URL               = "{{ ws_url }}";
+  const MY_USERNAME          = "{{ request.user.username|escapejs }}";
+  const IS_RESUME            = {{ is_resume|yesno:"true,false" }};
+  const SESSION_IN_PROGRESS  = {{ session_in_progress|yesno:"true,false" }};
+  // sessionStorage key for persisting this tab's player token (per-tab, not shared).
+  const TAB_TOKEN_KEY        = 'wsz6_join_' + SESSION_KEY;
+
+  let ws             = null;
+  let myToken        = null;
+  let isOwner        = false;
+  let selectedToken  = null;
+  let latestState    = null;
+  let gameStarted    = false;
+  let pendingName    = null;   // name chosen in overlay before WS opens
+  let reconnectCount = 0;
+  const MAX_RECONNECTS = 5;
+
+  // ── Connection ──────────────────────────────────────────────────
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(proto + '://' + location.host + WS_URL);
+    ws.onopen = () => {
+      reconnectCount = 0;
+      setStatus('Connected to lobby.');
+      const storedToken = sessionStorage.getItem(TAB_TOKEN_KEY);
+      if (storedToken) {
+        // Same tab reconnecting (page refresh) — try to resume the same player.
+        send({ type: 'resume', token: storedToken });
+      }
+      // If no stored token, wait for 'need_identity' from the server;
+      // pendingName (set by the overlay) will be sent then.
+    };
+    ws.onmessage = (evt) => dispatch(JSON.parse(evt.data));
+    ws.onerror   = ()   => setStatus('WebSocket error — try refreshing.');
+    ws.onclose   = function(e) {
+      setStatus('Disconnected (code ' + e.code + ').');
+      // Auto-reconnect on abnormal closure (1006 = no close frame from server,
+      // typically a proxy timeout). Don't reconnect on intentional closes (4xxx).
+      if (e.code === 1006 && reconnectCount < MAX_RECONNECTS) {
+        reconnectCount++;
+        setStatus('Connection lost — reconnecting (' + reconnectCount + '/' + MAX_RECONNECTS + ')…');
+        setTimeout(connect, 3000);
+      } else if (e.code === 1006) {
+        setStatus('Connection lost. Please refresh the page.');
+      }
+    };
+  }
+
+  function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  // ── Startup (tab-aware) ──────────────────────────────────────────
+
+  function startup() {
+    const storedToken = sessionStorage.getItem(TAB_TOKEN_KEY);
+
+    if (SESSION_IN_PROGRESS && storedToken) {
+      // Game already running and this tab played before — go straight to game page.
+      window.location.href = '/play/game/' + SESSION_KEY + '/' + storedToken + '/';
+      return;
+    }
+
+    if (SESSION_IN_PROGRESS && !storedToken) {
+      setStatus('A game is in progress. Connect to observe or wait for the next round.');
+    }
+
+    if (storedToken) {
+      // Tab was here before (e.g. browser refresh) — reconnect without prompting.
+      connect();
+    } else {
+      // Fresh tab — show the "Who are you playing as?" overlay.
+      showNameOverlay();
+    }
+  }
+
+  function showNameOverlay() {
+    const overlay = document.getElementById('name-overlay');
+    const input   = document.getElementById('overlay-name-input');
+    if (MY_USERNAME) input.value = MY_USERNAME;
+    overlay.style.display = 'flex';
+    input.focus();
+    // Allow Enter key to submit.
+    input.addEventListener('keydown', function handler(e) {
+      if (e.key === 'Enter') { input.removeEventListener('keydown', handler); startWithName(); }
+    });
+  }
+
+  window.startWithName = function() {
+    const name = document.getElementById('overlay-name-input').value.trim();
+    if (!name) { document.getElementById('overlay-name-input').focus(); return; }
+    pendingName = name;
+    document.getElementById('name-overlay').style.display = 'none';
+    connect();
+  };
+
+  // ── Message dispatch ─────────────────────────────────────────────
+
+  function dispatch(msg) {
+    if      (msg.type === 'need_identity') onNeedIdentity(msg);
+    else if (msg.type === 'connected')     onConnected(msg);
+    else if (msg.type === 'lobby_state')   onLobbyState(msg);
+    else if (msg.type === 'game_starting') onGameStarting(msg);
+    else if (msg.type === 'error')         setStatus('⚠ ' + msg.message);
+  }
+
+  function onNeedIdentity(msg) {
+    // Server says: send a join to create a new player.
+    if (pendingName) {
+      // User already entered a name in the overlay — send it now.
+      send({ type: 'join', name: pendingName });
+      pendingName = null;
+    } else {
+      // Stale / invalid resume token, or first connection with no overlay shown.
+      // Show the overlay so the user can enter a name.
+      sessionStorage.removeItem(TAB_TOKEN_KEY);   // clear the stale token
+      const input = document.getElementById('overlay-name-input');
+      if (msg.suggested_name) input.value = msg.suggested_name;
+      document.getElementById('name-overlay').style.display = 'flex';
+      input.focus();
+    }
+  }
+
+  function onConnected(msg) {
+    myToken = msg.player_token;
+    isOwner = msg.is_owner;
+
+    // Persist this tab's player token so page refreshes reconnect to the same player.
+    sessionStorage.setItem(TAB_TOKEN_KEY, myToken);
+
+    // Show which display name this tab is using.
+    if (msg.player_name) {
+      const badge = document.getElementById('playing-as-badge');
+      badge.textContent = 'Playing as: ' + msg.player_name;
+      badge.style.display = 'inline-block';
+    }
+
+    // Pre-fill the name input with the current player name for easy renaming.
+    const nameInput = document.getElementById('name-input');
+    if (!nameInput.value) nameInput.value = MY_USERNAME || '';
+
+    if (isOwner) {
+      document.getElementById('start-section').style.display = 'block';
+      document.getElementById('assign-hint').style.display = 'block';
+    }
+    setStatus(isOwner
+      ? (IS_RESUME ? 'Session is paused. You can resume it.' : 'You are the session owner.')
+      : 'Waiting for owner to start…');
+  }
+
+  function onLobbyState(msg) {
+    latestState = msg;
+    if (gameStarted) {
+      // Game is running: update only the popup's read-only view.
+      renderRolesPopupContent(msg.roles);
+    } else {
+      renderRoles(msg.roles, msg.min_players_to_start);
+      renderUnassigned(msg.roles.unassigned);
+    }
+  }
+
+  function onGameStarting(msg) {
+    gameStarted = true;
+    setStatus('Game is starting… redirecting.');
+    // Hide the lobby editing controls; show the Roles popup button.
+    document.getElementById('roles-container').style.display = 'none';
+    document.getElementById('start-section').style.display   = 'none';
+    const nameRow = document.querySelector('#name-input')?.parentElement;
+    if (nameRow) nameRow.style.display = 'none';
+    document.getElementById('roles-popup-btn').style.display = 'inline-block';
+    if (latestState) renderRolesPopupContent(latestState.roles);
+    if (msg.game_page_url) window.location.href = msg.game_page_url;
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────
+
+  function renderRoles(rolesData, minPlayers) {
+    const el = document.getElementById('roles-container');
+    if (!rolesData || !rolesData.roles) { el.innerHTML = '<p style="color:#aaa;">No roles.</p>'; return; }
+    let html = '';
+    for (const r of rolesData.roles) {
+      const isFull = r.current_count >= r.max_players;
+      const myTokenInRole = r.players.some(p => p.token === myToken);
+
+      // Build the player chips.
+      let chipsHtml = '';
+      if (r.players.length === 0) {
+        chipsHtml = '<span class="empty-slot">empty</span>';
+      } else {
+        for (const p of r.players) {
+          const isMe = (p.token === myToken);
+          if (p.is_bot) {
+            chipsHtml += `<span class="bot-chip">🤖 ${esc(p.name)}`;
+            if (isOwner) {
+              chipsHtml += ` <button class="unassign-btn"
+                onclick="removePlayerFromRole('${p.token}', ${r.role_num})"
+                title="Remove bot">×</button>`;
+            }
+            chipsHtml += `</span>`;
+          } else {
+            const selClass = (p.token === selectedToken) ? ' selected-chip' : '';
+            const myClass  = isMe ? ' my-chip' : '';
+            const clickAttr = isOwner
+              ? `onclick="selectPlayer('${p.token}')" style="cursor:pointer;"`
+              : '';
+            chipsHtml += `<span class="player-chip${selClass}${myClass}" ${clickAttr}>${esc(p.name)}`;
+            if (isOwner) {
+              chipsHtml += ` <button class="unassign-btn"
+                onclick="event.stopPropagation(); removePlayerFromRole('${p.token}', ${r.role_num})"
+                title="Remove player">×</button>`;
+            }
+            chipsHtml += `</span>`;
+          }
+        }
+      }
+
+      // Build action buttons.
+      let actionsHtml = '';
+
+      // Join button: any player not in this role when it is not full.
+      if (!myTokenInRole && !isFull) {
+        actionsHtml += `<button class="btn btn-sm btn-outline-primary"
+          data-action="join-role"
+          onclick="joinRole(${r.role_num})">Join</button>`;
+      }
+      // Leave button: current player is in this role.
+      if (myTokenInRole) {
+        actionsHtml += `<button class="btn btn-sm btn-outline-secondary"
+          data-action="leave-role"
+          onclick="leaveRole(${r.role_num})">Leave</button>`;
+      }
+      // Owner: "Add here" when a player is selected and not already in this role.
+      if (isOwner && selectedToken && !r.players.some(p => p.token === selectedToken)) {
+        actionsHtml += `<button class="btn btn-sm btn-success"
+          onclick="assignRole(${r.role_num})">Add here</button>`;
+      }
+      // Owner: "+ Bot" when there is remaining capacity.
+      if (isOwner && !isFull) {
+        actionsHtml += `<button class="btn btn-sm btn-outline-secondary"
+          style="font-size:.75rem;"
+          onclick="assignBot(${r.role_num})">+ Bot</button>`;
+      }
+
+      html += `<div class="role-row" data-role-num="${r.role_num}">
+        <div class="role-header">
+          <span class="role-name">${esc(r.name)}</span>
+          <span class="role-capacity">(${r.current_count}/${r.max_players})</span>
+          <div class="role-players">${chipsHtml}</div>
+        </div>
+        ${actionsHtml ? '<div class="role-actions">' + actionsHtml + '</div>' : ''}
+        <span style="font-size:.75rem;color:#999;margin-left:.3rem;">${esc(r.description||'')}</span>
+      </div>`;
+    }
+    html += `<p style="font-size:.8rem;color:#666;margin-top:.4rem;">Min. players required: <strong>${minPlayers}</strong></p>`;
+    el.innerHTML = html;
+  }
+
+  function renderRolesPopupContent(rolesData) {
+    const el = document.getElementById('roles-popup-content');
+    if (!rolesData || !rolesData.roles) { el.innerHTML = ''; return; }
+    let html = '';
+    for (const r of rolesData.roles) {
+      const playerNames = r.players.map(p => esc(p.is_bot ? '🤖 ' + p.name : p.name)).join(', ') || '<em>empty</em>';
+      html += `<div class="role-row">
+        <div class="role-header">
+          <span class="role-name">${esc(r.name)}</span>
+          <span class="role-capacity">(${r.current_count}/${r.max_players})</span>
+          <span style="font-size:.88rem; margin-left:.4rem;">${playerNames}</span>
+        </div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function renderUnassigned(unassigned) {
+    const list = document.getElementById('unassigned-list');
+    if (!unassigned || unassigned.length === 0) {
+      list.innerHTML = '<li style="color:#aaa;font-style:italic;">All players assigned</li>';
+      return;
+    }
+    let html = '';
+    for (const p of unassigned) {
+      const sel = p.token === selectedToken;
+      html += `<li style="${sel?'background:#cce5ff;font-weight:600;':''}" onclick="selectPlayer('${p.token}')">${esc(p.name)}</li>`;
+    }
+    list.innerHTML = html;
+  }
+
+  // ── User actions ─────────────────────────────────────────────────
+
+  window.sendJoin = function() {
+    const name = document.getElementById('name-input').value.trim();
+    if (name) send({ type: 'join', name });
+  };
+
+  window.sendStartGame = function() {
+    send({ type: 'start_game' });
+    document.getElementById('start-btn').disabled = true;
+  };
+
+  window.selectPlayer = function(token) {
+    selectedToken = (selectedToken === token) ? null : token;
+    if (latestState) {
+      renderRoles(latestState.roles, latestState.min_players_to_start);
+      renderUnassigned(latestState.roles.unassigned);
+    }
+  };
+
+  window.joinRole = function(roleNum) {
+    send({ type: 'join_role', role_num: roleNum });
+  };
+
+  window.leaveRole = function(roleNum) {
+    send({ type: 'leave_role', role_num: roleNum });
+  };
+
+  window.assignRole = function(roleNum) {
+    if (!selectedToken) return;
+    send({ type: 'assign_role', token: selectedToken, role_num: roleNum });
+    selectedToken = null;
+  };
+
+  window.removePlayerFromRole = function(token, roleNum) {
+    send({ type: 'unassign_role', token: token, role_num: roleNum });
+    if (selectedToken === token) selectedToken = null;
+  };
+
+  window.assignBot = function(roleNum) {
+    send({ type: 'assign_bot', role_num: roleNum, strategy: 'random' });
+  };
+
+  window.toggleRolesPopup = function() {
+    const popup = document.getElementById('roles-popup');
+    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+  };
+
+  function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+
+  function esc(str) {
+    const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML;
+  }
+
+  startup();
+})();
+</script>
+{% endblock %}

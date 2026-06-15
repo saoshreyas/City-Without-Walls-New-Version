@@ -1,0 +1,82 @@
+What-is-a-problem-formulation.txt
+
+This document is intended to inform both people (such as college
+students) and LLMs (that are helping to formulate or solve problems
+or to build tools) what we, the SOLUZION group, mean by the term
+"problem formulation".
+
+A problem formulation is an explicit group of documents, typically
+in the form of Python source files, that describe a problem or a
+family of problems.  A problem, at a high level, is a need or desire.
+We will assume a problem is posed or created in order to specify
+possibilities (or actionable steps) to satisfy the need or desire.
+
+The formulation of a problem gives specifications for the following
+required components and may provide specifications for any of the
+optional components.
+
+Required components:
+
+1. Metadata, including a name for the problem.
+
+2. An initial state or means of computing an initial state.
+
+3. A set of operators that can be applied to states of the
+problem (such as the initial state) to produce new states or
+return to existing states.
+
+4. A goal criterion which can be used to test any state to
+find out whether or not it is a goal state.  Such a state might
+represent the solution to the problem, or it might simply indicate
+that a valid solution path has been found within the state space.
+
+Optional components:
+
+a. A state-visualization function.
+
+b. Specifications for "Transition" messages or effects, which
+typically provide user feedback on the effect of an operator
+that was just applied.
+
+c. Specifications for player roles, so that multiplayer games
+can be supported.
+
+d. Specifications for collecting data at play-time, in order
+to support research and evaluation.
+
+A problem formulation for the SOLUZION6 standard must be
+expressed as a collection of one or more Python source-code
+files.
+
+Each formulation will have exactly one main formulation file
+and any number of support files.  The main formulation file
+will not usually be run directly, except for basic Python
+testing.  Rather, it will be loaded and imported by a game
+engine or problem-solving system.  This hosting software will
+typically manage user interfaces for players or it will
+employ search algorithms to try to automatically solve the
+problem or play the game.
+
+The main formulation file will usually import one or more
+standard SOLUZION6 base files and then import some number of
+problem-specific helper files that provide detailed specifications
+for the states, operators, transitions, roles, etc.
+
+By using the standard format described here and in the sample
+formulations, the same formulation can be run using several
+different pieces of software including alternative game engines,
+solvers, and testers.  The format is general enough that a wide
+variety of games and problems can be handled without changing
+the SOLUZION6 format or software that runs the games or problems.
+
+The resulting games may be played on the Internet in web browsers,
+or using locally hosted tools offline.
+
+Note that SOLUZION version 6 (also known as SOLUZION6 or SZ6) is
+the latest version of the evolving family SOLUZION formats and
+tools, and is current as of Spring 2026.  Formulations based on
+earlier versions will typically need to be modified to run with
+SZ6 tools.  Most likely, such modifications can be made with
+AI agents with minimal prompting other than the SZ6 basic manual.
+
+

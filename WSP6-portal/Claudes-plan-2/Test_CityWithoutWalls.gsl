@@ -1,0 +1,72 @@
+# Test_CityWithoutWalls.gsl
+#
+# Smoke test: five stakeholder roles, two full policy cycles (10 operators).
+# Uses Set_rng_seed for reproducible macro / success rolls (development only).
+#
+# Usage:
+#   cd wsz6_portal && python manage.py run_gsl ../Test_CityWithoutWalls.gsl
+#
+# SECURITY NOTE: plaintext password below (dev fixture only).
+
+
+Login admin pass1234 display:"Alice"
+
+Select_Game city-without-walls
+
+Create_Session name:"CWW smoke test"
+
+Add_Player mock display:"Bob"
+Add_Player mock display:"Carol"
+Add_Player mock display:"Dave"
+Add_Player mock display:"Eve"
+
+Assign_role Alice  Neighborhoods
+Assign_role Bob    Business
+Assign_role Carol  Medical
+Assign_role Dave   Shelters
+Assign_role Eve    University
+
+Set_rng_seed 42
+
+Start_game
+
+Assert_phase        playing
+Assert_player_count 5
+Assert_state        phase  intro
+Assert_state        current_role_num  0
+Assert_active_role  Neighborhoods
+
+Op Alice "Review goals & begin simulation"
+
+Assert_state        phase  playing
+Assert_state        current_role_num  0
+
+
+# --- Round 1 (one moderate operator per role) ---------------------------
+
+Op Alice "Civic Forum (reduce tensions)"
+Op Bob   "Volunteer Street Ambassadors"
+Op Carol "Expand Telehealth for Unhoused"
+Op Dave  "Volunteer Training (social workers +3)"
+Op Eve   "Open Data & Dashboard (public transparency)"
+
+Assert_state  game_round           2
+Assert_state  homeless_population  10815
+Assert_state  public_support       54.0
+Assert_state  legal_pressure       10.97
+
+
+# --- Round 2 ----------------------------------------------------------
+
+Op Alice "Civic Forum (reduce tensions)"
+Op Bob   "Volunteer Street Ambassadors"
+Op Carol "Expand Telehealth for Unhoused"
+Op Dave  "Volunteer Training (social workers +3)"
+Op Eve   "Open Data & Dashboard (public transparency)"
+
+Assert_state  game_round           3
+Assert_state  homeless_population  10931
+Assert_state  public_support       57.5
+Assert_state  legal_pressure       10.47
+
+Assert_phase  playing
